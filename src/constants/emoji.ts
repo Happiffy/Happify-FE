@@ -3,7 +3,7 @@ export const Emoji = {
   records: 'fluent-emoji-flat:notebook',
   community: 'fluent-emoji-flat:people-hugging',
   care: 'fluent-emoji-flat:heart-hands',
-  chat: 'fluent-emoji-flat:mobile-phone',
+  chat: 'fluent-emoji-flat:speech-balloon',
   escalation: 'fluent-emoji-flat:sos-button',
   history: 'fluent-emoji-flat:counterclockwise-arrows-button',
   profile: 'fluent-emoji-flat:bust-in-silhouette',
