@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes } from 'react'
+import { useRef, useState, type FormEvent, type InputHTMLAttributes } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { completeGoogleRedirect, getAuthErrorMessage, registerWithEmail, registerWithGoogle, signInWithEmail, signInWithGoogle } from '@/pages/auth/api/auth.service'
+import { getAuthErrorMessage, registerWithEmail, registerWithGoogle, signInWithEmail, signInWithGoogle } from '@/pages/auth/api/auth.service'
 import { BrandLink, GoogleIcon } from '@/components/ui'
 import { page, primaryBtn } from '@/components/ui/theme'
 
@@ -22,22 +22,6 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
-
-  useEffect(() => {
-    let active = true;
-    setIsSubmitting(true);
-    void completeGoogleRedirect()
-      .then((user) => {
-        if (active && user) navigate(mode === 'register' ? '/onboarding' : '/dashboard');
-      })
-      .catch((error) => {
-        if (active) setError(getAuthErrorMessage(error, mode));
-      })
-      .finally(() => {
-        if (active) setIsSubmitting(false);
-      });
-    return () => { active = false; };
-  }, [mode, navigate]);
 
   const completeAuth = async (action: () => Promise<unknown>) => {
     if (isSubmittingRef.current) return;

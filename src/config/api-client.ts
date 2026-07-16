@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { getFirebaseAuth } from '@/config/firebase';
 import { ApiService } from '@/constants/api-service';
 
@@ -8,12 +8,31 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
-  const token = await getFirebaseAuth().currentUser?.getIdToken();
-  if (token) {
+  const auth = getFirebaseAuth();
+  await auth.authStateReady();
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
     config.headers.Authorization = `Bearer ${token}`;
-    localStorage.setItem('happify.idToken', token);
   }
   return config;
+});
+
+apiClient.interceptors.response.use(undefined, async (error) => {
+  const config = error.config as (InternalAxiosRequestConfig & { _authRetried?: boolean }) | undefined;
+  const auth = getFirebaseAuth();
+  if (error.response?.status === 401 && auth.currentUser && config && !config._authRetried) {
+    config._authRetried = true;
+    const token = await auth.currentUser.getIdToken(true);
+    config.headers.Authorization = `Bearer ${token}`;
+    return apiClient(config);
+  }
+  if (error.response?.status === 401) {
+    await auth.signOut();
+    ['happify.idToken', 'happify.userId', 'happify.role'].forEach((key) => localStorage.removeItem(key));
+    if (window.location.pathname.startsWith('/dashboard')) window.location.assign('/login');
+  }
+  return Promise.reject(error);
 });
 
 export default apiClient;

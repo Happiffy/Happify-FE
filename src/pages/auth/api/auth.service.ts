@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getRedirectResult, GoogleAuthProvider, linkWithCredential, reauthenticateWithCredential, signInWithEmailAndPassword, signInWithRedirect, signOut, updatePassword, updateProfile, type UserCredential } from 'firebase/auth';
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, linkWithCredential, reauthenticateWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut, updatePassword, updateProfile, type UserCredential } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { isAxiosError } from 'axios';
 import apiClient from '@/config/api-client';
@@ -8,8 +8,6 @@ import { Api } from '@/constants/api';
 type AuthMode = 'login' | 'register';
 
 const sessionKeys = ['happify.idToken', 'happify.userId', 'happify.role'];
-const googleModeKey = 'happify.googleAuthMode';
-let googleRedirectPromise: Promise<unknown> | null = null;
 
 function clearApplicationSession() {
   sessionKeys.forEach((key) => localStorage.removeItem(key));
@@ -19,7 +17,7 @@ async function persistBackendUser(credential: UserCredential, mode: AuthMode, di
   const idToken = await credential.user.getIdToken();
   const response = await apiClient.post(Api.authVerify, { idToken, displayName, mode });
   const user = response.data.data.user;
-  localStorage.setItem('happify.idToken', idToken);
+  localStorage.removeItem('happify.idToken');
   localStorage.setItem('happify.userId', user.id);
   localStorage.setItem('happify.role', user.role ?? 'USER');
   return user;
@@ -32,13 +30,8 @@ function getGoogleProvider() {
 }
 
 async function startGoogleAuth(mode: AuthMode) {
-  sessionStorage.setItem(googleModeKey, mode);
-  try {
-    await signInWithRedirect(getFirebaseAuth(), getGoogleProvider());
-  } catch (error) {
-    sessionStorage.removeItem(googleModeKey);
-    throw error;
-  }
+  const credential = await signInWithPopup(getFirebaseAuth(), getGoogleProvider());
+  return persistBackendUser(credential, mode);
 }
 
 export function signInWithGoogle() {
@@ -47,22 +40,6 @@ export function signInWithGoogle() {
 
 export function registerWithGoogle() {
   return startGoogleAuth('register');
-}
-
-export function completeGoogleRedirect() {
-  if (googleRedirectPromise) return googleRedirectPromise;
-  googleRedirectPromise = (async () => {
-    const mode = sessionStorage.getItem(googleModeKey) as AuthMode | null;
-    if (!mode) return null;
-    try {
-      const credential = await getRedirectResult(getFirebaseAuth());
-      if (!credential) return null;
-      return await persistBackendUser(credential, mode);
-    } finally {
-      sessionStorage.removeItem(googleModeKey);
-    }
-  })();
-  return googleRedirectPromise;
 }
 
 export async function signInWithEmail(email: string, password: string) {
@@ -116,7 +93,6 @@ export async function logout() {
     await signOut(getFirebaseAuth());
   } finally {
     clearApplicationSession();
-    sessionStorage.removeItem(googleModeKey);
   }
 }
 
