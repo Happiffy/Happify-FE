@@ -175,7 +175,8 @@ function DashboardPage() {
   }, [displayNameInput, profile?.displayName]);
 
   useEffect(() => {
-    if (activeView !== 'community') return;
+    if (!['overview', 'community'].includes(activeView)) return;
+    setHeatmapError('');
     void getHeatmap().then(setHeatmapRegions).catch(() => setHeatmapError('The anonymous heatmap is unavailable right now.'));
   }, [activeView]);
 
@@ -436,6 +437,19 @@ function DashboardPage() {
             </div>
           </article>
         </section>
+        <article className={`${card} p-5 sm:p-6`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-black tracking-[-.04em]">Anonymous community heatmap</h2>
+              <p className="mt-1 font-bold text-[#999]">Coarse regional mood patterns from at least three anonymous contributions.</p>
+            </div>
+            <span className="rounded-full bg-[#E5F4FF] px-3 py-1 text-xs font-black text-[#1CB0F6]">Last 7 days</span>
+          </div>
+          <div className="mt-5">
+            {heatmapError && <div className="grid min-h-80 place-items-center rounded-3xl bg-[#F7F7F7] p-6 text-center font-bold text-[#999]">{heatmapError}</div>}
+            {!heatmapError && <CommunityHeatmap items={heatmapRegions} />}
+          </div>
+        </article>
         <section className="grid gap-4 xl:grid-cols-2">
           <article className={`${card} p-5 sm:p-6`}>
             <h2 className="text-2xl font-black tracking-[-.04em]">Recent journals</h2>
