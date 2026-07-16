@@ -1,108 +1,93 @@
 # Happify Frontend
 
-Frontend web untuk Happify, platform kesehatan mental yang membantu pengguna mencatat mood, melakukan journaling, berbicara dengan AI Companion, dan memantau perkembangan emosional secara berkelanjutan.
-
----
+The Happify web client is a mental wellbeing application for mood tracking, journaling, AI companion access, anonymous community support, and ongoing emotional progress monitoring.
 
 ## Overview
 
-Happify Frontend menyediakan pengalaman web untuk pengguna yang ingin:
+The frontend provides:
 
-- mengakses landing page dan informasi produk Happify
-- melakukan login dan registrasi menggunakan Firebase Authentication
-- menyelesaikan onboarding preferensi pengguna
-- melihat dashboard mood dan insight kesehatan mental
-- mengakses journal dan fitur pendampingan emosional
-- menggunakan UI yang konsisten dengan tema Happify
+- Product landing pages and Happify information
+- Firebase Authentication sign-in and registration
+- User-preference onboarding
+- Mood, journal, referral, and wellbeing dashboard views
+- Anonymous community participation and professional-care workflows
+- A consistent, responsive Happify visual system
 
-Frontend tidak memanggil service AI secara langsung. Semua request aplikasi diarahkan ke BE-Happify.
+The frontend does not call the AI service directly. Application requests are sent to Happify Backend.
 
----
-
-## Tech Stack
+## Technology Stack
 
 | Area | Stack |
 | --- | --- |
 | Framework | React 19, Vite, TypeScript |
 | Routing | React Router |
-| Styling | Tailwind CSS, custom Happify UI system |
+| Styling | Tailwind CSS and the Happify UI system |
 | API Client | Axios |
 | Authentication | Firebase Authentication |
-| UI Icons | Phosphor Icons, Iconify |
-| Rich Text | Tiptap |
-| Animation | GSAP, Lottie |
 | Charts | Recharts |
+| Maps | MapLibre GL |
+| Rich Text | Tiptap |
+| Icons | Phosphor Icons and Iconify |
 | Testing | Vitest |
 | Linting | Oxlint |
-| Deployment | Railway |
-
----
 
 ## Features
 
-- **Landing Page** - informasi produk, masalah kesehatan mental, dan value proposition Happify.
-- **Authentication** - login dan registrasi pengguna dengan Firebase Authentication.
-- **Onboarding** - pengaturan preferensi awal pengguna.
-- **Mood Dashboard** - ringkasan mood, insight, trend, dan aktivitas pengguna.
-- **Daily Journaling** - antarmuka untuk menulis dan mengelola refleksi harian.
-- **AI Companion Access** - akses pengalaman percakapan dan hasil analisis dari backend.
-- **Responsive UI** - tampilan desktop dan mobile dengan tema visual Happify.
-- **Protected Routes** - dashboard hanya dapat diakses oleh pengguna yang memiliki session.
-
----
+- **Authentication** — Firebase sign-in, registration, session restoration, and protected routes.
+- **Onboarding** — Initial wellbeing and accessibility preferences.
+- **Mood Dashboard** — Mood summary, intensity trend, journal risk summary, referrals, and recent entries.
+- **Anonymous Heatmap** — Coarse k-anonymous regional mood aggregates with an apply-only custom date range.
+- **Journaling** — Daily reflections, rich-text entries, optional images, and AI-generated reflections.
+- **Community** — Anonymous posts, replies, support actions, and moderation-aware interactions.
+- **Professional Care** — Referral and care-chat interfaces.
+- **Responsive UI** — Desktop and mobile layouts with accessibility-aware controls.
 
 ## Routes
 
 | Path | Description |
 | --- | --- |
 | `/` | Landing page |
-| `/login` | Login pengguna |
-| `/register` | Registrasi pengguna |
-| `/onboarding` | Pengaturan preferensi awal |
-| `/dashboard` | Dashboard utama |
-| `/dashboard/:section` | Section tertentu pada dashboard |
-
----
+| `/login` | User sign-in |
+| `/register` | User registration |
+| `/onboarding` | Initial preference setup |
+| `/dashboard` | Main dashboard |
+| `/dashboard/:section` | Dashboard section |
 
 ## Environment Variables
 
-Buat file `.env` dari `.env.example`.
+Create `.env` from `.env.example`:
 
 ```env
 VITE_API_URL=http://localhost:4000
-VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=happify-990c2.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=happify-990c2
-VITE_FIREBASE_APP_ID=your_firebase_app_id
-VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
 ```
 
 | Variable | Description |
 | --- | --- |
-| `VITE_API_URL` | Base URL BE-Happify. Production: `https://happify-be-production.up.railway.app`. |
-| `VITE_FIREBASE_API_KEY` | Firebase Web API key untuk client authentication. |
+| `VITE_API_URL` | Base URL of Happify Backend. |
+| `VITE_FIREBASE_API_KEY` | Firebase Web API key. |
 | `VITE_FIREBASE_AUTH_DOMAIN` | Firebase authentication domain. |
-| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID Happify. |
-| `VITE_FIREBASE_APP_ID` | Firebase Web App ID. |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics measurement ID. |
-
-Frontend memakai `VITE_API_URL` untuk berkomunikasi dengan BE-Happify. Frontend tidak membutuhkan `AI_SERVICE_BASE_URL`.
-
----
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project identifier. |
+| `VITE_FIREBASE_APP_ID` | Firebase Web application identifier. |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics measurement identifier. |
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js `22.x`
-- npm `10.x`
-- BE-Happify berjalan dan dapat diakses dari `VITE_API_URL`
-- Firebase Web App configuration
+- npm `10.9.4` or later
+- Happify Backend reachable through `VITE_API_URL`
+- Firebase Web application configuration
 
 ### Installation
 
 ```bash
-npm install
+npm ci
 ```
 
 ### Development
@@ -111,78 +96,42 @@ npm install
 npm run dev
 ```
 
-Vite akan menjalankan aplikasi pada local development server.
-
 ### Build
 
 ```bash
 npm run build
 ```
 
-### Preview Production Build
+### Preview
 
 ```bash
 npm run preview
 ```
 
-### Lint
+### Quality Checks
 
 ```bash
 npm run lint
-```
-
-### Test
-
-```bash
 npm test
+npm run build
 ```
-
----
-
-## Deployment
-
-Production frontend menggunakan Railway.
-
-| Environment | URL |
-| --- | --- |
-| Local | `http://localhost:5173` |
-| Production | `https://happify-fe-production.up.railway.app` |
-
-Railway melakukan deployment dari branch `main`. Set environment variables melalui Railway Variables, bukan melalui repository.
-
----
 
 ## Project Structure
 
-```txt
+```text
 src
-|-- api              # Query dan service API
-|-- assets           # Asset gambar dan visual Happify
-|-- components       # Komponen UI bersama
-|-- config           # API client dan konfigurasi aplikasi
-|-- constants        # Konstanta aplikasi
+|-- api              # API queries and services
+|-- assets           # Images and visual assets
+|-- components       # Shared UI components
+|-- config           # API client and application configuration
+|-- constants        # Application constants
 |-- hooks            # Custom React hooks
-|-- pages            # Modul halaman dan route
+|-- pages            # Pages and route modules
 |-- types            # TypeScript types
-|-- App.tsx          # Route utama aplikasi
-|-- main.tsx         # Entry point React
+|-- App.tsx          # Application routes
+|-- main.tsx         # React entry point
 ```
 
----
+## Privacy
 
-## API Flow
-
-```txt
-Browser
-   |
-   v
-Happify Frontend
-   |
-   v
-BE-Happify
-   |
-   +--> PostgreSQL
-   +--> Firebase Admin
-   +--> Object Storage
-   +--> AI-Happify
-```
+Community API responses are designed to expose anonymous public content only. The heatmap renders coarse aggregate regions that satisfy the configured anonymity threshold; it does not expose individual coordinates or identities.

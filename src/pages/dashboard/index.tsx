@@ -468,7 +468,7 @@ function DashboardPage() {
             <div><label className="mb-2 block text-sm font-black text-[#555]" htmlFor="heatmap-end-date">End date</label><input className="min-h-12 w-full rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" id="heatmap-end-date" type="date" value={heatmapDraftEndDate} min={heatmapDraftStartDate} max={defaultHeatmapEndDate} onChange={(event) => setHeatmapDraftEndDate(event.target.value)} /></div>
             <button className={`${primaryBtn} min-h-12`} type="button" onClick={applyHeatmapRange}>Apply</button>
           </div>
-          <p className="mt-3 text-sm font-bold text-[#999]" aria-live="polite">Showing {heatmapStartDate} to {heatmapEndDate}. Date selection is only applied after pressing Apply.</p>
+          <p className="mt-3 text-sm font-bold text-[#999]" aria-live="polite">{heatmapDraftStartDate !== heatmapStartDate || heatmapDraftEndDate !== heatmapEndDate ? 'Date range changed. Press Apply to update the heatmap.' : `Showing ${heatmapStartDate} to ${heatmapEndDate}.`}</p>
           <div className="mt-5">
             {heatmapError && <div className="grid min-h-80 place-items-center rounded-3xl bg-[#F7F7F7] p-6 text-center font-bold text-[#999]">{heatmapError}</div>}
             {!heatmapError && <CommunityHeatmap items={heatmapRegions} />}
@@ -636,12 +636,8 @@ function DashboardPage() {
           <LoadMoreSentinel enabled={Boolean(communityCursor)} loading={isLoadingMoreCommunity} onVisible={() => void loadMoreCommunity()} />
         </div>
       </section>
-       <aside className="sticky top-6 hidden content-start gap-4 xl:grid">
-         <article className={`${card} overflow-hidden p-5`}>
-           <div className="flex items-center gap-3"><ColoredIcon icon={Emoji.heatmap} /><div><p className="text-sm font-black uppercase tracking-[.16em] text-[#168CC7]">Anonymous heatmap</p><p className="mt-1 text-sm font-bold text-[#777]">Only coarse regions with at least 3 contributions appear.</p></div></div>
-           <div className="mt-4">{heatmapError ? <p className="rounded-2xl bg-[#FFEBEB] p-3 font-bold text-[#D53838]" role="status">{heatmapError}</p> : <CommunityHeatmap items={heatmapRegions} />}</div>
-         </article>
-         <article className={`${card} p-5`}>
+        <aside className="sticky top-6 hidden content-start gap-4 xl:grid">
+          <article className={`${card} p-5`}>
            <p className="text-sm font-black uppercase tracking-[.16em] text-[#CE82FF]">Community pulse</p>
           <div className="mt-4 grid gap-3 font-bold text-[#777]">
             <div className="flex items-center gap-3 rounded-2xl bg-[#F7F7F7] p-3"><ColoredIcon icon={Emoji.community} /><span className="flex-1">Posts</span><span className="font-black">{communityPosts.length}</span></div>
@@ -743,8 +739,8 @@ function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen min-w-0 overflow-x-hidden bg-[#FBFBFB] text-[#3C3C3C] lg:grid lg:grid-cols-[236px_minmax(0,1fr)]">
-      <aside className="flex items-center justify-between gap-4 border-b-2 border-[#E5E5E5] bg-white p-4 lg:sticky lg:top-0 lg:h-screen lg:flex-col lg:items-stretch lg:border-r-2 lg:border-b-0 lg:gap-6 lg:p-5">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-[#FBFBFB] text-[#3C3C3C]">
+      <aside className="flex items-center justify-between gap-4 border-b-2 border-[#E5E5E5] bg-white p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-[236px] lg:flex-col lg:items-stretch lg:border-r-2 lg:border-b-0 lg:gap-6 lg:p-5">
         <Link className="text-3xl font-black tracking-[-.06em] text-[#58CC02]" to="/" aria-label="Happify home">Happify</Link>
         <nav className="hidden gap-2 font-black lg:grid" aria-label="Dashboard navigation">
           {menuItems.map(({ id, label }) => (
@@ -756,7 +752,7 @@ function DashboardPage() {
         </nav>
         <button className={`${btn} max-lg:hidden bg-[#FF4B4B] text-white shadow-[0_5px_0_#D53838] lg:mt-auto`} type="button" onClick={() => setShowLogoutAlert(true)}>Sign out</button>
       </aside>
-      <main className={`grid min-w-0 w-full gap-6 ${activeView === 'chat' ? 'h-screen grid-rows-[1fr] p-0 pb-20 lg:pb-0' : activeView === 'records' ? 'content-start p-5 pb-24 sm:p-6 lg:pb-6' : 'content-start p-5 pb-24 sm:p-6 lg:pb-6'}`}>
+      <main className={`grid min-w-0 w-full gap-6 lg:ml-[236px] ${activeView === 'chat' ? 'h-screen grid-rows-[1fr] p-0 pb-20 lg:pb-0' : activeView === 'records' ? 'content-start p-5 pb-24 sm:p-6 lg:pb-6' : 'content-start p-5 pb-24 sm:p-6 lg:pb-6'}`}>
         {activeView !== 'chat' && <section className="flex items-center justify-between gap-4">
           {activeView === 'overview' ? (
             <div className="flex items-center gap-4">
