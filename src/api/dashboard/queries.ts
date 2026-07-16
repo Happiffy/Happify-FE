@@ -23,6 +23,7 @@ export type UserProfile = {
 
 export type CommunityComment = { id: string, alias: string, content: string, imageUrl?: string | null, createdAt: string };
 export type CommunityPost = { id: string, alias: string, content: string, imageUrl?: string | null, mood?: string | null, supportCount: number, likedByMe?: boolean, createdAt: string, comments?: CommunityComment[] };
+export type HeatmapRegion = { regionKey: string, count: number, moods: Record<string, number> };
 
 export type ReferralBackground = { preference?: { primaryGoal?: string, triggers?: string[], supportTone?: string, highRiskAction?: string } | null, recentMoods?: { state: string, intensity: number, triggers: string[], note?: string | null, createdAt: string }[], recentJournals?: { title: string, riskLevel: string, detectedMood?: string | null, aiReflection?: string | null, createdAt: string }[] };
 export type CareChatMessage = { id: string, senderId: string, content: string, imageUrl?: string | null, readAt?: string | null, createdAt: string, sender?: { id: string, displayName?: string | null, avatarUrl?: string | null, role?: string } };
@@ -72,6 +73,11 @@ export async function applyPsychologist(payload: { userId: string, fullName: str
 export async function getCommunityPosts(cursor?: string, userId?: string) {
   const response = await apiClient.get(Api.community, { params: { ...(cursor ? { cursor } : {}), ...(userId ? { userId } : {}), limit: 10 } });
   return response.data.data as { items: CommunityPost[], nextCursor: string | null };
+}
+
+export async function getHeatmap() {
+  const response = await apiClient.get(Api.heatmap, { params: { days: 7 } });
+  return response.data.data.items as HeatmapRegion[];
 }
 
 export async function supportCommunityPost(postId: string, userId: string) {

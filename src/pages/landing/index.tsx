@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, List, X } from "@phosphor-icons/react";
+import { ArrowDown, ArrowRight, List, X } from "@phosphor-icons/react";
 import ColoredIcon from "@/components/colored-icon";
 import { Emoji } from "@/constants/emoji";
 import gsap from "gsap";
@@ -62,7 +62,20 @@ const safety = [
   },
 ];
 
-const companionSteps = ["Voice", "STT", "LLM + RAG", "Emotion", "TTS"];
+const companionSteps = [
+  {
+    title: "Start talking",
+    body: "Share what is on your mind, at your own pace.",
+  },
+  {
+    title: "Feel understood",
+    body: "Get a thoughtful response that meets you where you are.",
+  },
+  {
+    title: "Find your next step",
+    body: "Try a gentle tool or connect with human support when needed.",
+  },
+];
 
 function HeroVisual() {
   return (
@@ -349,7 +362,7 @@ export default function LandingPage() {
 
         <section id="safety" className={`${shell} py-16 sm:py-24`} data-reveal>
           <div className={`${card} bg-[#F8FFF4] p-6 sm:p-8 lg:p-10`}>
-            <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,.75fr)_minmax(0,1.25fr)] lg:items-center">
               <div className="max-w-md">
                 <p className="text-sm font-black uppercase tracking-[.18em] text-[#58CC02]">
                   Companion + Safety
@@ -357,26 +370,40 @@ export default function LandingPage() {
                 <h2 className="mt-3 text-4xl font-black tracking-[-.04em] sm:text-5xl">
                   Talk. Feel heard. Stay safe.
                 </h2>
+                <p className="mt-4 max-w-sm font-bold leading-relaxed text-[#777]">
+                  A gentle space to share, reflect, and find support when you
+                  need it.
+                </p>
               </div>
-              <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr] items-center gap-0.5 sm:gap-3">
-                {companionSteps.map((step, index) => (
-                  <div className="contents" key={step}>
-                    <article className="grid min-h-[72px] justify-items-center gap-1 rounded-xl border-2 border-[#E5E5E5] bg-white p-1.5 text-center shadow-[0_2px_0_#D9D9D9] sm:min-h-[124px] sm:rounded-3xl sm:p-4">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch sm:gap-3">
+                {companionSteps.map(({ title, body }, index) => (
+                  <div className="contents" key={title}>
+                    <article className="grid min-h-[116px] grid-cols-[2.75rem_1fr] content-center items-start gap-x-3 rounded-2xl border-2 border-[#E5E5E5] bg-white p-4 shadow-[0_2px_0_#D9D9D9] sm:grid-cols-1 sm:justify-items-center sm:gap-2 sm:rounded-3xl sm:p-4 sm:text-center">
                       <span
-                        className={`grid size-8 place-items-center rounded-lg text-xs sm:size-14 sm:rounded-2xl sm:text-base ${index % 2 === 0 ? tones.green : tones.blue}`}
+                        className={`grid size-11 place-items-center rounded-xl text-sm font-black text-white sm:size-14 sm:rounded-2xl sm:text-base ${index % 2 === 0 ? tones.green : tones.blue}`}
                       >
                         {index + 1}
                       </span>
-                      <strong className="text-[8px] font-black leading-tight sm:text-sm">
-                        {step}
-                      </strong>
+                      <div>
+                        <h3 className="font-black leading-tight">{title}</h3>
+                        <p className="mt-1 text-sm font-bold leading-snug text-[#777] sm:text-xs">
+                          {body}
+                        </p>
+                      </div>
                     </article>
                     {index < companionSteps.length - 1 && (
-                      <ArrowRight
-                        className="text-[#58CC02]"
-                        size={12}
-                        weight="bold"
-                      />
+                      <div className="grid place-items-center py-0.5 sm:py-0">
+                        <ArrowDown
+                          className="text-[#58CC02] sm:hidden"
+                          size={20}
+                          weight="bold"
+                        />
+                        <ArrowRight
+                          className="hidden text-[#58CC02] sm:block"
+                          size={18}
+                          weight="bold"
+                        />
+                      </div>
                     )}
                   </div>
                 ))}

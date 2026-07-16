@@ -6,7 +6,7 @@ import {
 } from '@phosphor-icons/react'
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { changePassword, isPasswordProvider, logout as signOutUser } from '@/pages/auth/api/auth.service'
-import { applyPsychologist as submitPsychologistApplication, createCommunityComment, createCommunityPost, createJournal, createMood, createReferral as submitReferral, reviewReferral, sendCareChatMessage, supportCommunityPost, updateCareChatStatus, updateProfile, uploadImage } from '@/api/dashboard/queries'
+import { applyPsychologist as submitPsychologistApplication, createCommunityComment, createCommunityPost, createJournal, createMood, createReferral as submitReferral, getHeatmap, reviewReferral, sendCareChatMessage, supportCommunityPost, updateCareChatStatus, updateProfile, uploadImage, type HeatmapRegion } from '@/api/dashboard/queries'
 import { CloseChatAlert, DashboardAlert, LogoutAlert } from '@/components/dashboard/DashboardAlerts'
 import { DuoSelect, EmptyState, MoodBadge, MoodButton, SkeletonBox, UserAvatar } from '@/components/ui'
 import { btn, card, field, moodLabel, primaryBtn, tones } from '@/components/ui/theme'
@@ -14,6 +14,7 @@ import { useDashboardData } from '@/hooks/dashboard'
 import RichTextEditor, { type RichTextEditorHandle } from '@/components/rich-text-editor'
 import ColoredIcon from '@/components/colored-icon'
 import JournalJourney from '@/components/journal-journey'
+import { CommunityHeatmap } from '@/components/community-heatmap'
 import { Emoji, MenuEmoji } from '@/constants/emoji'
 
 function LoadMoreSentinel({ enabled, loading, onVisible }: { enabled: boolean, loading: boolean, onVisible: () => void }) {
@@ -68,6 +69,8 @@ function DashboardPage() {
   const [imagePreview, setImagePreview] = useState('');
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showCloseChatAlert, setShowCloseChatAlert] = useState(false);
+  const [heatmapRegions, setHeatmapRegions] = useState<HeatmapRegion[]>([]);
+  const [heatmapError, setHeatmapError] = useState('');
   const [seenCare, setSeenCare] = useState(() => localStorage.getItem('happify.seenCare') ?? '');
   const [seenChat, setSeenChat] = useState(() => localStorage.getItem('happify.seenChat') ?? '');
   const userId = localStorage.getItem('happify.userId') ?? '';
@@ -170,6 +173,11 @@ function DashboardPage() {
   useEffect(() => {
     if (profile?.displayName && !displayNameInput) setDisplayNameInput(profile.displayName);
   }, [displayNameInput, profile?.displayName]);
+
+  useEffect(() => {
+    if (activeView !== 'community') return;
+    void getHeatmap().then(setHeatmapRegions).catch(() => setHeatmapError('The anonymous heatmap is unavailable right now.'));
+  }, [activeView]);
 
   useEffect(() => {
     if (!activeChat?.id) return;
@@ -590,9 +598,13 @@ function DashboardPage() {
           <LoadMoreSentinel enabled={Boolean(communityCursor)} loading={isLoadingMoreCommunity} onVisible={() => void loadMoreCommunity()} />
         </div>
       </section>
-      <aside className="sticky top-6 hidden content-start gap-4 xl:grid">
-        <article className={`${card} p-5`}>
-          <p className="text-sm font-black uppercase tracking-[.16em] text-[#CE82FF]">Community pulse</p>
+       <aside className="sticky top-6 hidden content-start gap-4 xl:grid">
+         <article className={`${card} overflow-hidden p-5`}>
+           <div className="flex items-center gap-3"><ColoredIcon icon={Emoji.heatmap} /><div><p className="text-sm font-black uppercase tracking-[.16em] text-[#168CC7]">Anonymous heatmap</p><p className="mt-1 text-sm font-bold text-[#777]">Only coarse regions with at least 3 contributions appear.</p></div></div>
+           <div className="mt-4">{heatmapError ? <p className="rounded-2xl bg-[#FFEBEB] p-3 font-bold text-[#D53838]" role="status">{heatmapError}</p> : <CommunityHeatmap items={heatmapRegions} />}</div>
+         </article>
+         <article className={`${card} p-5`}>
+           <p className="text-sm font-black uppercase tracking-[.16em] text-[#CE82FF]">Community pulse</p>
           <div className="mt-4 grid gap-3 font-bold text-[#777]">
             <div className="flex items-center gap-3 rounded-2xl bg-[#F7F7F7] p-3"><ColoredIcon icon={Emoji.community} /><span className="flex-1">Posts</span><span className="font-black">{communityPosts.length}</span></div>
             <div className="flex items-center gap-3 rounded-2xl bg-[#F7F7F7] p-3"><ColoredIcon icon={Emoji.purpleHeart} /><span className="flex-1">Support given</span><span className="font-black">{communityPosts.reduce((sum, post) => sum + post.supportCount, 0)}</span></div>
