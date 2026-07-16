@@ -10,6 +10,7 @@ import { BrandLink, UserAvatar } from '@/components/ui'
 import { card, page, primaryBtn, shell, tones } from '@/components/ui/theme'
 import { DashboardAlert, LogoutAlert } from '@/components/dashboard/DashboardAlerts'
 import { useDashboardData } from '@/hooks/dashboard'
+import { logout } from '@/pages/auth/api/auth.service'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -62,10 +63,8 @@ function Nav() {
     return () => document.removeEventListener('mousedown', closeOnOutsideClick)
   }, [menuOpen, profileOpen])
 
-  const signOut = () => {
-    localStorage.removeItem('happify.idToken')
-    localStorage.removeItem('happify.userId')
-    localStorage.removeItem('happify.role')
+  const signOut = async () => {
+    await logout()
     sessionStorage.setItem('happify.toast', 'Signed out.');
     setProfileOpen(false)
     navigate('/')
@@ -104,7 +103,7 @@ function Nav() {
           </>
         )}
       </div>
-      {showSignOutAlert && <LogoutAlert onCancel={() => setShowSignOutAlert(false)} onConfirm={() => { setShowSignOutAlert(false); signOut(); }} />}
+      {showSignOutAlert && <LogoutAlert onCancel={() => setShowSignOutAlert(false)} onConfirm={() => { setShowSignOutAlert(false); void signOut(); }} />}
     </header>
   )
 }

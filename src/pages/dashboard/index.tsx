@@ -5,7 +5,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { changePassword, isPasswordProvider } from '@/pages/auth/api/auth.service'
+import { changePassword, isPasswordProvider, logout as signOutUser } from '@/pages/auth/api/auth.service'
 import { applyPsychologist as submitPsychologistApplication, createCommunityComment, createCommunityPost, createJournal, createMood, createReferral as submitReferral, reviewReferral, sendCareChatMessage, supportCommunityPost, updateCareChatStatus, updateProfile, uploadImage } from '@/api/dashboard/queries'
 import { CloseChatAlert, DashboardAlert, LogoutAlert } from '@/components/dashboard/DashboardAlerts'
 import { DuoSelect, EmptyState, MoodBadge, MoodButton, SkeletonBox, UserAvatar } from '@/components/ui'
@@ -89,10 +89,9 @@ function DashboardPage() {
   ];
   const menuItems = isPsychologist ? psychologistMenuItems : userMenuItems;
 
-  const logout = () => {
-    localStorage.removeItem('happify.idToken');
-    localStorage.removeItem('happify.userId');
-    localStorage.removeItem('happify.role');
+  const logout = async () => {
+    setShowLogoutAlert(false);
+    await signOutUser();
     navigate('/login');
   };
 
@@ -723,7 +722,7 @@ function DashboardPage() {
       </nav>
       {imagePreview && <button className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" type="button" aria-label="Close image preview" onClick={() => setImagePreview('')}><img className="max-h-[90vh] max-w-[92vw] rounded-3xl object-contain" src={imagePreview} alt="Preview" /></button>}
       {showCloseChatAlert && <CloseChatAlert onCancel={() => setShowCloseChatAlert(false)} onConfirm={() => { setShowCloseChatAlert(false); void toggleChatSession(); }} />}
-      {showLogoutAlert && <LogoutAlert onCancel={() => setShowLogoutAlert(false)} onConfirm={logout} />}
+      {showLogoutAlert && <LogoutAlert onCancel={() => setShowLogoutAlert(false)} onConfirm={() => void logout()} />}
     </div>
   )
 }

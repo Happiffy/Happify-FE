@@ -1,6 +1,6 @@
-import { useState, type FormEvent, type InputHTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { registerWithEmail, registerWithGoogle, signInWithEmail, signInWithGoogle } from '@/pages/auth/api/auth.service'
+import { completeGoogleRedirect, getAuthErrorMessage, registerWithEmail, registerWithGoogle, signInWithEmail, signInWithGoogle } from '@/pages/auth/api/auth.service'
 import { BrandLink, GoogleIcon } from '@/components/ui'
 import { page, primaryBtn } from '@/components/ui/theme'
 
@@ -21,16 +21,36 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    setIsSubmitting(true);
+    void completeGoogleRedirect()
+      .then((user) => {
+        if (active && user) navigate(mode === 'register' ? '/onboarding' : '/dashboard');
+      })
+      .catch((error) => {
+        if (active) setError(getAuthErrorMessage(error, mode));
+      })
+      .finally(() => {
+        if (active) setIsSubmitting(false);
+      });
+    return () => { active = false; };
+  }, [mode, navigate]);
 
   const completeAuth = async (action: () => Promise<unknown>) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setError('');
     setIsSubmitting(true);
     try {
       await action();
       navigate(isRegister ? '/onboarding' : '/dashboard');
-    } catch {
-      setError(isRegister ? 'Registration failed. Please try again.' : 'Account not found. Please register first.');
+    } catch (error) {
+      setError(getAuthErrorMessage(error, mode));
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
