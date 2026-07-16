@@ -17,6 +17,10 @@ import JournalJourney from '@/components/journal-journey'
 import { CommunityHeatmap } from '@/components/community-heatmap'
 import { Emoji, MenuEmoji } from '@/constants/emoji'
 
+function toDateInputValue(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 function LoadMoreSentinel({ enabled, loading, onVisible }: { enabled: boolean, loading: boolean, onVisible: () => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -69,8 +73,14 @@ function DashboardPage() {
   const [imagePreview, setImagePreview] = useState('');
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showCloseChatAlert, setShowCloseChatAlert] = useState(false);
+  const defaultHeatmapEndDate = toDateInputValue(new Date());
+  const defaultHeatmapStartDate = toDateInputValue(new Date(Date.now() - 6 * 86400000));
   const [heatmapRegions, setHeatmapRegions] = useState<HeatmapRegion[]>([]);
   const [heatmapError, setHeatmapError] = useState('');
+  const [heatmapDraftStartDate, setHeatmapDraftStartDate] = useState(defaultHeatmapStartDate);
+  const [heatmapDraftEndDate, setHeatmapDraftEndDate] = useState(defaultHeatmapEndDate);
+  const [heatmapStartDate, setHeatmapStartDate] = useState(defaultHeatmapStartDate);
+  const [heatmapEndDate, setHeatmapEndDate] = useState(defaultHeatmapEndDate);
   const [seenCare, setSeenCare] = useState(() => localStorage.getItem('happify.seenCare') ?? '');
   const [seenChat, setSeenChat] = useState(() => localStorage.getItem('happify.seenChat') ?? '');
   const userId = localStorage.getItem('happify.userId') ?? '';
@@ -177,8 +187,8 @@ function DashboardPage() {
   useEffect(() => {
     if (!['overview', 'community'].includes(activeView)) return;
     setHeatmapError('');
-    void getHeatmap().then(setHeatmapRegions).catch(() => setHeatmapError('The anonymous heatmap is unavailable right now.'));
-  }, [activeView]);
+    void getHeatmap({ startDate: heatmapStartDate, endDate: heatmapEndDate }).then(setHeatmapRegions).catch(() => setHeatmapError('The anonymous heatmap is unavailable right now.'));
+  }, [activeView, heatmapEndDate, heatmapStartDate]);
 
   useEffect(() => {
     if (!activeChat?.id) return;
@@ -378,6 +388,15 @@ function DashboardPage() {
   });
   const riskChartData = (analytics?.riskSummary ?? []).map((item) => ({ name: item.riskLevel, value: item.count }));
   const riskColors: Record<string, string> = { LOW: '#58CC02', MEDIUM: '#FFC800', HIGH: '#FF9600', CRISIS: '#FF4B4B' };
+  const heatmapRangeIsValid = heatmapDraftStartDate <= heatmapDraftEndDate && (new Date(`${heatmapDraftEndDate}T00:00:00Z`).getTime() - new Date(`${heatmapDraftStartDate}T00:00:00Z`).getTime()) <= 89 * 86400000;
+  const applyHeatmapRange = () => {
+    if (!heatmapRangeIsValid) {
+      setHeatmapError('Choose a valid date range of up to 90 days.');
+      return;
+    }
+    setHeatmapStartDate(heatmapDraftStartDate);
+    setHeatmapEndDate(heatmapDraftEndDate);
+  };
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -441,10 +460,15 @@ function DashboardPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-black tracking-[-.04em]">Anonymous community heatmap</h2>
-              <p className="mt-1 font-bold text-[#999]">Coarse regional mood patterns from at least three anonymous contributions.</p>
+              <p className="mt-1 font-bold text-[#999]">Coarse regional blocks from at least three anonymous contributions; no individual locations are shown.</p>
             </div>
-            <span className="rounded-full bg-[#E5F4FF] px-3 py-1 text-xs font-black text-[#1CB0F6]">Last 7 days</span>
           </div>
+          <div className="mt-5 grid gap-3 rounded-3xl bg-[#F7F7F7] p-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+            <div><label className="mb-2 block text-sm font-black text-[#555]" htmlFor="heatmap-start-date">Start date</label><input className="min-h-12 w-full rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" id="heatmap-start-date" type="date" value={heatmapDraftStartDate} max={heatmapDraftEndDate} onChange={(event) => setHeatmapDraftStartDate(event.target.value)} /></div>
+            <div><label className="mb-2 block text-sm font-black text-[#555]" htmlFor="heatmap-end-date">End date</label><input className="min-h-12 w-full rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" id="heatmap-end-date" type="date" value={heatmapDraftEndDate} min={heatmapDraftStartDate} max={defaultHeatmapEndDate} onChange={(event) => setHeatmapDraftEndDate(event.target.value)} /></div>
+            <button className={`${primaryBtn} min-h-12`} type="button" onClick={applyHeatmapRange}>Apply</button>
+          </div>
+          <p className="mt-3 text-sm font-bold text-[#999]" aria-live="polite">Showing {heatmapStartDate} to {heatmapEndDate}. Date selection is only applied after pressing Apply.</p>
           <div className="mt-5">
             {heatmapError && <div className="grid min-h-80 place-items-center rounded-3xl bg-[#F7F7F7] p-6 text-center font-bold text-[#999]">{heatmapError}</div>}
             {!heatmapError && <CommunityHeatmap items={heatmapRegions} />}

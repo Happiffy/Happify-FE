@@ -75,8 +75,8 @@ export async function getCommunityPosts(cursor?: string, userId?: string) {
   return response.data.data as { items: CommunityPost[], nextCursor: string | null };
 }
 
-export async function getHeatmap() {
-  const response = await apiClient.get(Api.heatmap, { params: { days: 7 } });
+export async function getHeatmap(params: { startDate: string, endDate: string }) {
+  const response = await apiClient.get(Api.heatmap, { params });
   return response.data.data.items as HeatmapRegion[];
 }
 
