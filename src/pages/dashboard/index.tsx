@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
+  ArrowLeft,
   ArrowRight,
+  CaretDown,
   X,
 } from '@phosphor-icons/react'
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
@@ -19,6 +21,28 @@ import { Emoji, MenuEmoji } from '@/constants/emoji'
 
 function toDateInputValue(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+
+function DatePickerPopover({ label, value, onChange, max }: { label: string, value: string, onChange: (value: string) => void, max?: string }) {
+  const [open, setOpen] = useState(false);
+  const [month, setMonth] = useState(() => new Date(`${value}T00:00:00`));
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1).getDay();
+  const dayCount = new Date(year, monthIndex + 1, 0).getDate();
+  const formatDate = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return <div className="relative min-w-0">
+    <span className="mb-2 block text-sm font-black text-[#555]">{label}</span>
+    <button className="flex min-h-12 w-full items-center justify-between rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold text-[#3C3C3C] outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
+      {value}<CaretDown size={18} weight="bold" />
+    </button>
+    {open && <div className="absolute left-0 top-[calc(100%+8px)] z-30 w-72 rounded-3xl border-2 border-[#E5E5E5] bg-white p-4 shadow-[0_6px_0_#D9D9D9]">
+      <div className="mb-3 flex items-center justify-between"><button className="grid size-9 place-items-center rounded-xl hover:bg-[#F7F7F7]" type="button" aria-label="Previous month" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))}><ArrowLeft size={17} weight="bold" /></button><span className="font-black">{monthLabel}</span><button className="grid size-9 place-items-center rounded-xl hover:bg-[#F7F7F7]" type="button" aria-label="Next month" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))}><ArrowRight size={17} weight="bold" /></button></div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-black text-[#999]">{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => <span key={day}>{day}</span>)}</div>
+      <div className="mt-2 grid grid-cols-7 gap-1">{Array.from({ length: firstDay }, (_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: dayCount }, (_, index) => { const day = index + 1; const date = formatDate(day); const disabled = Boolean(max && date > max); return <button className={`grid size-8 place-items-center rounded-xl text-sm font-bold ${date === value ? 'bg-[#58CC02] text-white' : disabled ? 'cursor-not-allowed text-[#CCC]' : 'hover:bg-[#F1FFE8]'}`} type="button" disabled={disabled} key={date} onClick={() => { onChange(date); setOpen(false); }}>{day}</button> })}</div>
+    </div>}
+  </div>
 }
 
 function LoadMoreSentinel({ enabled, loading, onVisible }: { enabled: boolean, loading: boolean, onVisible: () => void }) {
@@ -464,8 +488,8 @@ function DashboardPage() {
             </div>
           </div>
           <div className="mt-5 grid gap-3 rounded-3xl bg-[#F7F7F7] p-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
-            <div><label className="mb-2 block text-sm font-black text-[#555]" htmlFor="heatmap-start-date">Start date</label><input className="min-h-12 w-full rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" id="heatmap-start-date" type="date" value={heatmapDraftStartDate} max={heatmapDraftEndDate} onChange={(event) => setHeatmapDraftStartDate(event.target.value)} /></div>
-            <div><label className="mb-2 block text-sm font-black text-[#555]" htmlFor="heatmap-end-date">End date</label><input className="min-h-12 w-full rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" id="heatmap-end-date" type="date" value={heatmapDraftEndDate} min={heatmapDraftStartDate} max={defaultHeatmapEndDate} onChange={(event) => setHeatmapDraftEndDate(event.target.value)} /></div>
+            <DatePickerPopover label="Start date" value={heatmapDraftStartDate} max={heatmapDraftEndDate} onChange={setHeatmapDraftStartDate} />
+            <DatePickerPopover label="End date" value={heatmapDraftEndDate} max={defaultHeatmapEndDate} onChange={setHeatmapDraftEndDate} />
             <button className={`${primaryBtn} min-h-12`} type="button" onClick={applyHeatmapRange}>Apply</button>
           </div>
           <p className="mt-3 text-sm font-bold text-[#999]" aria-live="polite">{heatmapDraftStartDate !== heatmapStartDate || heatmapDraftEndDate !== heatmapEndDate ? 'Date range changed. Press Apply to update the heatmap.' : `Showing ${heatmapStartDate} to ${heatmapEndDate}.`}</p>
@@ -752,7 +776,7 @@ function DashboardPage() {
         </nav>
         <button className={`${btn} max-lg:hidden bg-[#FF4B4B] text-white shadow-[0_5px_0_#D53838] lg:mt-auto`} type="button" onClick={() => setShowLogoutAlert(true)}>Sign out</button>
       </aside>
-      <main className={`grid min-w-0 w-full gap-6 lg:ml-[236px] ${activeView === 'chat' ? 'h-screen grid-rows-[1fr] p-0 pb-20 lg:pb-0' : activeView === 'records' ? 'content-start p-5 pb-24 sm:p-6 lg:pb-6' : 'content-start p-5 pb-24 sm:p-6 lg:pb-6'}`}>
+      <main className={`grid min-w-0 w-full gap-6 lg:ml-[236px] lg:w-[calc(100%-236px)] ${activeView === 'chat' ? 'h-screen grid-rows-[1fr] p-0 pb-20 lg:pb-0' : activeView === 'records' ? 'content-start p-5 pb-24 sm:p-6 lg:pb-6' : 'content-start p-5 pb-24 sm:p-6 lg:pb-6'}`}>
         {activeView !== 'chat' && <section className="flex items-center justify-between gap-4">
           {activeView === 'overview' ? (
             <div className="flex items-center gap-4">
