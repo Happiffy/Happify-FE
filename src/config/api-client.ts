@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getFirebaseAuth } from '@/config/firebase';
 import { ApiService } from '@/constants/api-service';
 
 const apiClient = axios.create({
@@ -6,9 +7,12 @@ const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('happify.idToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+apiClient.interceptors.request.use(async (config) => {
+  const token = await getFirebaseAuth().currentUser?.getIdToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+    localStorage.setItem('happify.idToken', token);
+  }
   return config;
 });
 

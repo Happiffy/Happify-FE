@@ -17,7 +17,7 @@ type Props = {
   onChange?: (html: string, text: string) => void
 }
 
-const toolbarButton = 'grid size-10 place-items-center rounded-xl text-[#777] transition hover:bg-[#F1FFE8] hover:text-[#46A302] disabled:opacity-40'
+const toolbarButton = 'grid size-9 place-items-center rounded-xl text-[#777] transition hover:bg-[#F1FFE8] hover:text-[#46A302] disabled:opacity-40 sm:size-10'
 const activeButton = 'bg-[#F1FFE8] text-[#46A302]'
 
 const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ placeholder, minHeight = 'min-h-24', onChange }, ref) {
@@ -30,7 +30,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
     content: '',
     editorProps: {
       attributes: {
-        class: `${minHeight} p-4 font-bold leading-7 text-[#3C3C3C] outline-none`,
+        class: `${minHeight} min-w-0 break-words p-3 font-bold leading-7 text-[#3C3C3C] outline-none sm:p-4`,
       },
     },
     onUpdate: ({ editor: currentEditor }) => onChange?.(currentEditor.getHTML(), currentEditor.getText()),
@@ -45,13 +45,13 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
   if (!editor) return null
 
   return (
-    <div className="overflow-hidden rounded-3xl border-2 border-[#E5E5E5] bg-white">
-      <div className="flex flex-wrap gap-1 border-b-2 border-[#EFEFEF] bg-[#FBFBFB] p-2">
+    <div className="min-w-0 overflow-hidden rounded-3xl border-2 border-[#E5E5E5] bg-white">
+      <div className="flex min-w-0 flex-wrap gap-0.5 border-b-2 border-[#EFEFEF] bg-[#FBFBFB] p-1.5 sm:gap-1 sm:p-2">
         <button className={`${toolbarButton} ${editor.isActive('bold') ? activeButton : ''}`} type="button" aria-label="Bold" onClick={() => editor.chain().focus().toggleBold().run()}><TextB size={20} weight="bold" /></button>
         <button className={`${toolbarButton} ${editor.isActive('italic') ? activeButton : ''}`} type="button" aria-label="Italic" onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic size={20} weight="bold" /></button>
         <button className={`${toolbarButton} ${editor.isActive('bulletList') ? activeButton : ''}`} type="button" aria-label="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets size={20} weight="bold" /></button>
         <button className={`${toolbarButton} ${editor.isActive('orderedList') ? activeButton : ''}`} type="button" aria-label="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListNumbers size={20} weight="bold" /></button>
-        <span className="mx-1 my-2 w-0.5 bg-[#E5E5E5]" />
+        <span className="mx-0.5 my-2 w-0.5 bg-[#E5E5E5] sm:mx-1" aria-hidden="true" />
         <button className={`${toolbarButton} ${editor.isActive({ textAlign: 'left' }) ? activeButton : ''}`} type="button" aria-label="Align left" onClick={() => editor.chain().focus().setTextAlign('left').run()}><TextAlignLeft size={20} weight="bold" /></button>
         <button className={`${toolbarButton} ${editor.isActive({ textAlign: 'center' }) ? activeButton : ''}`} type="button" aria-label="Align center" onClick={() => editor.chain().focus().setTextAlign('center').run()}><TextAlignCenter size={20} weight="bold" /></button>
         <button className={`${toolbarButton} ${editor.isActive({ textAlign: 'right' }) ? activeButton : ''}`} type="button" aria-label="Align right" onClick={() => editor.chain().focus().setTextAlign('right').run()}><TextAlignRight size={20} weight="bold" /></button>
