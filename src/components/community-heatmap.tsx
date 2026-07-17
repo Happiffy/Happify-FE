@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FeatureCollection, Polygon } from 'geojson'
 import maplibregl from 'maplibre-gl'
-import { Map, MapControls, useMap } from '@/components/ui/map'
+import { Map, MapControls, MapMarker, MarkerContent, useMap } from '@/components/ui/map'
 
 export type HeatmapRegion = {
   regionKey: string
@@ -83,9 +83,12 @@ export function CommunityHeatmap({ items }: { items: HeatmapRegion[] }) {
     }),
   }), [items])
 
-  return <div className="relative h-80 w-full overflow-hidden rounded-3xl border-2 border-[#E5E5E5]" aria-label="Anonymous community mood heatmap">
+  return <div className="relative h-[420px] w-full overflow-hidden rounded-none border-y-2 border-[#E5E5E5] sm:h-80 sm:rounded-3xl sm:border-2" aria-label="Anonymous community mood heatmap">
     <Map center={[106.8, -6.2]} zoom={10} styles={{ light: 'https://tiles.openfreemap.org/styles/bright', dark: 'https://tiles.openfreemap.org/styles/bright' }}>
       <HeatmapLayer data={data} onSelect={setSelected} />
+      {items.map((item) => <MapMarker key={item.regionKey} longitude={item.longitude + 0.05} latitude={item.latitude + 0.05} onClick={() => setSelected({ id: item.regionKey, regionKey: item.regionKey, count: item.count, mood: dominantMood(item.moods), color: moodColor(dominantMood(item.moods)) })}>
+        <MarkerContent><button type="button" className="grid size-16 place-items-center rounded-2xl border-2 border-white/80 text-xs font-black text-white shadow-[0_3px_0_rgba(0,0,0,.18)]" style={{ backgroundColor: moodColor(dominantMood(item.moods)) }}>{item.count}</button></MarkerContent>
+      </MapMarker>)}
       <MapControls position="top-right" showFullscreen={false} showLocate={false} />
     </Map>
     {selected && <div className="absolute bottom-4 left-4 rounded-2xl bg-white px-4 py-3 font-bold shadow-[0_3px_0_#D9D9D9]">

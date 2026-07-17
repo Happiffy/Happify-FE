@@ -17,6 +17,7 @@ import RichTextEditor, { type RichTextEditorHandle } from '@/components/rich-tex
 import ColoredIcon from '@/components/colored-icon'
 import JournalJourney from '@/components/journal-journey'
 import { CommunityHeatmap } from '@/components/community-heatmap'
+import { getFirebaseAuth } from '@/config/firebase'
 import { Emoji, MenuEmoji, MoodEmoji } from '@/constants/emoji'
 
 function toDateInputValue(date: Date) {
@@ -88,7 +89,7 @@ function DashboardPage() {
   const [chatSearch, setChatSearch] = useState('');
   const [chatImage, setChatImage] = useState('');
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
-  const [onlineSessions, setOnlineSessions] = useState<Record<string, boolean>>({});
+  const [onlineSessions] = useState<Record<string, boolean>>({});
   const [readSessions, setReadSessions] = useState<Record<string, boolean>>({});
   const [certificateUrl, setCertificateUrl] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
@@ -148,32 +149,47 @@ function DashboardPage() {
   }, [activeChatId, activeView, careChats, searchParams, userId]);
 
   useEffect(() => {
+    if (!userId) return;
     const wsBaseUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/^http/, 'ws');
-    const channels = ['community', 'care', `user:${userId}:care`, ...(activeChatId ? [`care-chat:${activeChatId}`] : [])];
-    const sockets = channels.map((channel) => {
-      const socket = new WebSocket(`${wsBaseUrl}/ws?channel=${encodeURIComponent(channel)}`);
-      socket.onmessage = (event) => {
-        const payload = JSON.parse(String(event.data));
-        if (payload.type === 'community:post') setCommunityPosts((posts) => posts.some((post) => post.id === payload.post.id) ? posts : [payload.post, ...posts]);
-        if (payload.type === 'community:comment') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId && !(post.comments ?? []).some((comment) => comment.id === payload.comment.id) ? { ...post, comments: [...(post.comments ?? []), payload.comment] } : post));
-        if (payload.type === 'community:support') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId ? { ...post, supportCount: payload.supportCount, likedByMe: payload.userId === userId ? true : post.likedByMe } : post));
-        if (payload.type === 'presence' && payload.channel?.startsWith('care-chat:')) setOnlineSessions((sessions) => ({ ...sessions, [payload.channel.replace('care-chat:', '')]: payload.count > 1 }));
-        if (payload.type === 'care-chat:session') setCareChats((chats) => chats.map((chat) => chat.id === payload.session.id ? { ...chat, status: payload.session.status, closedAt: payload.session.closedAt, updatedAt: payload.session.updatedAt } : chat));
-        if (payload.type === 'care-chat:typing' && payload.userId !== userId) setTypingUsers((users) => ({ ...users, [payload.sessionId]: payload.name ?? 'Care partner' }));
-        if (payload.type === 'care-chat:stop-typing') setTypingUsers((users) => ({ ...users, [payload.sessionId]: '' }));
-        if (payload.type === 'care-chat:read' && payload.userId !== userId) setReadSessions((sessions) => ({ ...sessions, [payload.sessionId]: true }));
-        if (payload.type === 'care-chat:message') setCareChats((chats) => chats.map((chat) => chat.id === payload.message.sessionId && !(chat.messages ?? []).some((item) => item.id === payload.message.id) ? { ...chat, messages: [...(chat.messages ?? []), payload.message], updatedAt: payload.message.createdAt } : chat));
-        if (payload.type === 'referral:reviewed' && payload.referral?.status === 'ACCEPTED' && payload.referral?.chatSession?.id) {
-          setActiveChatId(payload.referral.chatSession.id);
-          navigate('/dashboard/chat');
+    const socket = new WebSocket(`${wsBaseUrl}/ws`);
+    chatSocketRef.current = socket;
+    socket.onopen = async () => {
+      try {
+        const token = await getFirebaseAuth().currentUser?.getIdToken();
+        if (!token) {
+          socket.close();
+          return;
         }
-        if (payload.type?.startsWith('referral:')) void refetch();
-      };
-      if (channel === `care-chat:${activeChatId}`) chatSocketRef.current = socket;
-      return socket;
-    });
-    return () => sockets.forEach((socket) => socket.close());
-  }, [activeChatId, navigate, refetch, setCareChats, setCommunityPosts, userId]);
+        socket.send(JSON.stringify({ type: 'auth', token }));
+      } catch {
+        socket.close();
+      }
+    };
+    socket.onmessage = (event) => {
+      const payload = JSON.parse(String(event.data));
+      if (payload.type === 'authenticated') {
+        const channels = ['community', ...(isPsychologist ? ['care'] : []), `user:${userId}:care`, ...(activeChatId ? [`care-chat:${activeChatId}`] : [])];
+        channels.forEach((channel) => socket.send(JSON.stringify({ type: 'subscribe', channel })));
+        return;
+      }
+      if (payload.type === 'community:post') setCommunityPosts((posts) => posts.some((post) => post.id === payload.post.id) ? posts : [payload.post, ...posts]);
+      if (payload.type === 'community:comment') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId && !(post.comments ?? []).some((comment) => comment.id === payload.comment.id) ? { ...post, comments: [...(post.comments ?? []), payload.comment] } : post));
+      if (payload.type === 'community:support') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId ? { ...post, supportCount: payload.supportCount } : post));
+      if (payload.type === 'care-chat:session') setCareChats((chats) => chats.map((chat) => chat.id === payload.session.id ? { ...chat, status: payload.session.status, closedAt: payload.session.closedAt, updatedAt: payload.session.updatedAt } : chat));
+      if (payload.type === 'care-chat:typing' && payload.userId !== userId) setTypingUsers((users) => ({ ...users, [payload.sessionId]: payload.isTyping ? 'Care partner' : '' }));
+      if (payload.type === 'care-chat:read' && payload.userId !== userId) setReadSessions((sessions) => ({ ...sessions, [payload.sessionId]: true }));
+      if (payload.type === 'care-chat:message') setCareChats((chats) => chats.map((chat) => chat.id === payload.message.sessionId && !(chat.messages ?? []).some((item) => item.id === payload.message.id) ? { ...chat, messages: [...(chat.messages ?? []), payload.message], updatedAt: payload.message.createdAt } : chat));
+      if (payload.type === 'referral:reviewed' && payload.referral?.status === 'ACCEPTED' && payload.referral?.chatSession?.id) {
+        setActiveChatId(payload.referral.chatSession.id);
+        navigate('/dashboard/chat');
+      }
+      if (payload.type?.startsWith('referral:')) void refetch();
+    };
+    return () => {
+      if (chatSocketRef.current === socket) chatSocketRef.current = null;
+      socket.close();
+    };
+  }, [activeChatId, isPsychologist, navigate, refetch, setCareChats, setCommunityPosts, userId]);
 
   const filteredCareChats = careChats.filter((chat) => chat.status !== 'CLOSED').filter((chat) => {
     const peer = chat.userId === userId ? chat.psychologist : chat.user;
@@ -181,6 +197,7 @@ function DashboardPage() {
   });
   const openCareChats = careChats.filter((chat) => chat.status !== 'CLOSED');
   const activeChat = openCareChats.find((chat) => chat.id === activeChatId);
+  const activeChatPeer = activeChat ? (activeChat.userId === userId ? activeChat.psychologist : activeChat.user) : undefined;
   const filteredReferrals = referrals.filter((referral) => {
     const keyword = careSearch.trim().toLowerCase();
     const searchable = `${referral.providerName ?? ''} ${referral.user?.displayName ?? ''} ${referral.reason} ${referral.status ?? ''} ${referral.riskLevel}`.toLowerCase();
@@ -218,10 +235,12 @@ function DashboardPage() {
   }, [activeView, heatmapEndDate, heatmapStartDate]);
 
   useEffect(() => {
-    if (!activeChat?.id) return;
-    if (chatSocketRef.current?.readyState === WebSocket.OPEN) chatSocketRef.current.send(JSON.stringify({ type: 'care-chat:read', sessionId: activeChat.id, userId }));
+    if (!activeChat?.id || chatSocketRef.current?.readyState !== WebSocket.OPEN) return;
+    (activeChat.messages ?? []).filter((message) => message.senderId !== userId && !message.readAt).forEach((message) => {
+      chatSocketRef.current?.send(JSON.stringify({ type: 'care-chat:read', sessionId: activeChat.id, messageId: message.id }));
+    });
     setReadSessions((sessions) => ({ ...sessions, [activeChat.id]: false }));
-  }, [activeChat?.id, userId]);
+  }, [activeChat?.id, activeChat?.messages, userId]);
 
   const saveMood = async () => {
     if (!userId || isSaving) return;
@@ -351,8 +370,8 @@ function DashboardPage() {
 
   const updateChatDraft = (value: string) => {
     setChatDraft(value);
-    if (!activeChat?.id) return;
-    if (chatSocketRef.current?.readyState === WebSocket.OPEN) chatSocketRef.current.send(JSON.stringify({ type: value ? 'care-chat:typing' : 'care-chat:stop-typing', sessionId: activeChat.id, userId, name: profile?.displayName ?? 'Care partner' }));
+    if (!activeChat?.id || chatSocketRef.current?.readyState !== WebSocket.OPEN) return;
+    chatSocketRef.current.send(JSON.stringify({ type: 'care-chat:typing', sessionId: activeChat.id, isTyping: Boolean(value) }));
   };
 
   const requestCloseChat = () => {
@@ -388,7 +407,7 @@ function DashboardPage() {
     setChatDraft('');
     setChatImage('');
     setCareChats((chats) => chats.map((chat) => chat.id === sessionId ? { ...chat, messages: [...(chat.messages ?? []), { id: pendingId, senderId: userId, content, imageUrl: image || null, createdAt: new Date().toISOString() }] } : chat));
-    chatSocketRef.current?.send(JSON.stringify({ type: 'care-chat:stop-typing', sessionId, userId }));
+    if (chatSocketRef.current?.readyState === WebSocket.OPEN) chatSocketRef.current.send(JSON.stringify({ type: 'care-chat:typing', sessionId, isTyping: false }));
     setPendingAction('chat');
     try {
       const imageUrl = image ? await uploadImageIfNeeded(image) : '';
@@ -483,7 +502,7 @@ function DashboardPage() {
             </div>
           </article>
         </section>
-        <article className={`${card} p-5 sm:p-6`}>
+        <article className={`${card} overflow-hidden p-5 sm:p-6`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-black tracking-[-.04em]">Anonymous community heatmap</h2>
@@ -496,8 +515,8 @@ function DashboardPage() {
             <button className={`${primaryBtn} min-h-12`} type="button" onClick={applyHeatmapRange}>Apply</button>
           </div>
           <p className="mt-3 text-sm font-bold text-[#999]" aria-live="polite">{heatmapDraftStartDate !== heatmapStartDate || heatmapDraftEndDate !== heatmapEndDate ? 'Date range changed. Press Apply to update the heatmap.' : `Showing ${heatmapStartDate} to ${heatmapEndDate}.`}</p>
-          <div className="mt-5">
-            {heatmapError && <div className="grid min-h-80 place-items-center rounded-3xl bg-[#F7F7F7] p-6 text-center font-bold text-[#999]">{heatmapError}</div>}
+          <div className="mt-5 -mx-5 sm:mx-0">
+            {heatmapError && <div className="grid min-h-80 place-items-center rounded-none bg-[#F7F7F7] p-6 text-center font-bold text-[#999] sm:rounded-3xl">{heatmapError}</div>}
             {!heatmapError && <CommunityHeatmap items={heatmapRegions} />}
           </div>
         </article>
@@ -702,7 +721,7 @@ function DashboardPage() {
          </aside>
         <article className={`${activeChatId || careChats.length === 0 ? 'grid' : 'hidden xl:grid'} min-h-0 h-full ${activeChat ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : 'grid-rows-[1fr]'} overflow-hidden bg-white`}>
           {!activeChat && <div className="grid h-full place-items-center text-center"><div><h2 className="text-2xl font-black tracking-[-.04em]">Choose a conversation</h2><p className="mt-2 font-bold text-[#999]">Pick a chat from the list to start messaging.</p></div></div>}
-          {activeChat && <><header className="flex items-center gap-3 border-b-2 border-[#EFEFEF] p-4 sm:p-5"><button className="grid size-10 place-items-center rounded-full bg-[#F7F7F7] text-[#777] xl:hidden" type="button" aria-label="Back to chats" onClick={() => { setActiveChatId(''); setSearchParams({}); }}><ArrowRight className="rotate-180" size={22} weight="bold" /></button><span className="grid size-12 place-items-center rounded-full bg-[#1CB0F6] font-black text-white">{((activeChat.userId === userId ? activeChat.psychologist?.displayName : activeChat.user?.displayName) ?? 'C').charAt(0).toUpperCase()}</span><div className="min-w-0 flex-1"><h3 className="truncate text-2xl font-black tracking-[-.04em]">{activeChat.userId === userId ? (activeChat.psychologist?.displayName ?? 'Psychologist') : (activeChat.user?.displayName ?? 'User')}</h3><p className="flex items-center gap-2 font-bold text-[#999]"><span className={`size-2.5 rounded-full ${onlineSessions[activeChat.id] ? 'bg-[#58CC02]' : 'bg-[#AAA]'}`} />{typingUsers[activeChat.id] ? `${typingUsers[activeChat.id]} is typing...` : onlineSessions[activeChat.id] ? 'Online' : 'Offline'}</p></div><button className="ml-auto rounded-2xl bg-[#FFEBEB] px-4 py-2 font-black text-[#D53838] shadow-[0_3px_0_#F2B8B8] active:translate-y-0.5 active:shadow-none" type="button" disabled={pendingAction === 'chat-status'} onClick={requestCloseChat}>{pendingAction === 'chat-status' ? 'Closing...' : 'Close'}</button></header><div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain bg-[#FBFBFB] p-5"><div className="inline-flex items-center gap-2 justify-self-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#999] shadow-[0_2px_0_#E5E5E5]"><ColoredIcon icon={Emoji.sparkle} size="sm" />{activeChat.status === 'CLOSED' ? 'Session closed' : (activeChat.messages ?? []).length > 0 ? 'Session started again' : 'Session started'}</div>{(activeChat.messages ?? []).length === 0 && activeChat.status !== 'CLOSED' && <EmptyState icon="fluent-emoji-flat:speech-balloon" tone={tones.blue} title="No messages yet" body="Start with a short, kind message." />}{(activeChat.messages ?? []).map((message) => { const mine = message.senderId === userId; return <div className={`grid max-w-[78%] gap-1 ${mine ? 'justify-self-end' : 'justify-self-start'}`} key={message.id}><div className={`rounded-[24px] px-5 py-3 font-bold ${mine ? 'bg-[#1CB0F6] text-white' : 'bg-white text-[#555]'}`}>{message.content && <p>{message.content}</p>}{message.imageUrl && <button className="mt-2 block" type="button" onClick={() => setImagePreview(message.imageUrl ?? '')}><img className="max-h-72 rounded-2xl object-cover" src={message.imageUrl} alt="Chat attachment" /></button>}</div>{mine && <span className="justify-self-end text-xs font-black text-[#999]">{readSessions[activeChat.id] ? 'Read' : 'Sent'}</span>}</div> })}</div>{chatImage && <div className="border-t-2 border-[#EFEFEF] bg-white px-4 pt-3"><div className="relative w-fit"><img className="max-h-32 rounded-2xl object-cover" src={chatImage} alt="Chat attachment preview" /><button className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-[#FF4B4B] text-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></div></div>}<form className="flex items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-4" onSubmit={sendChat}><label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-4 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><textarea className="min-h-12 max-h-32 flex-1 resize-none rounded-3xl border-0 bg-[#F7F7F7] px-5 py-3 font-bold outline-none focus:bg-[#F1FFE8]" value={chatDraft} onChange={(event) => updateChatDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void sendChat(event as unknown as FormEvent<HTMLFormElement>); }} placeholder={activeChat.status === 'CLOSED' ? 'Session is closed' : 'Write a message...'} disabled={activeChat.status === 'CLOSED'} aria-label="Care chat message" rows={1} /><button className="rounded-full bg-[#58CC02] px-6 py-3 font-black text-white shadow-[0_4px_0_#46A302] active:translate-y-0.5 active:shadow-none disabled:opacity-70" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form></>}
+          {activeChat && <><header className="flex items-center gap-3 border-b-2 border-[#EFEFEF] p-4 sm:p-5"><button className="grid size-10 place-items-center rounded-full bg-[#F7F7F7] text-[#777] xl:hidden" type="button" aria-label="Back to chats" onClick={() => { setActiveChatId(''); setSearchParams({}); }}><ArrowRight className="rotate-180" size={22} weight="bold" /></button>{activeChatPeer?.avatarUrl ? <img className="size-12 rounded-full border-2 border-[#E5E5E5] object-cover" src={activeChatPeer.avatarUrl} alt={`${activeChatPeer.displayName ?? 'Care partner'} profile`} referrerPolicy="no-referrer" /> : <span className="grid size-12 place-items-center rounded-full bg-[#1CB0F6] font-black text-white">{(activeChatPeer?.displayName ?? 'C').charAt(0).toUpperCase()}</span>}<div className="min-w-0 flex-1"><h3 className="truncate text-2xl font-black tracking-[-.04em]">{activeChatPeer?.displayName ?? 'Care partner'}</h3><p className="flex items-center gap-2 font-bold text-[#999]"><span className={`size-2.5 rounded-full ${onlineSessions[activeChat.id] ? 'bg-[#58CC02]' : 'bg-[#AAA]'}`} />{typingUsers[activeChat.id] ? `${typingUsers[activeChat.id]} is typing...` : onlineSessions[activeChat.id] ? 'Online' : 'Offline'}</p></div><button className="ml-auto rounded-2xl bg-[#FFEBEB] px-4 py-2 font-black text-[#D53838] shadow-[0_3px_0_#F2B8B8] active:translate-y-0.5 active:shadow-none" type="button" disabled={pendingAction === 'chat-status'} onClick={requestCloseChat}>{pendingAction === 'chat-status' ? 'Closing...' : 'Close'}</button></header><form className="order-3 flex flex-wrap items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-3 sm:flex-nowrap sm:p-4" onSubmit={sendChat}>{chatImage && <span className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[#EAF8FF] px-3 font-black text-[#168CC7]"><ColoredIcon icon={Emoji.picture} size="sm" />Photo ready<button className="grid size-6 place-items-center rounded-full bg-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></span>}<label className="grid min-h-11 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-3 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} size="sm" /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><input className="min-h-11 min-w-0 flex-1 rounded-2xl border-2 border-[#E5E5E5] px-4 font-bold outline-none focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#D6F2FF]" value={chatDraft} maxLength={1200} disabled={pendingAction === 'chat'} onChange={(event) => updateChatDraft(event.target.value)} placeholder="Write a message..." aria-label="Message" /><button className="min-h-11 rounded-2xl bg-[#58CC02] px-4 font-black text-white shadow-[0_3px_0_#46A302] disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED' || (!chatDraft.trim() && !chatImage)}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form><div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain bg-[#FBFBFB] p-5"><div className="inline-flex items-center gap-2 justify-self-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#999] shadow-[0_2px_0_#E5E5E5]"><ColoredIcon icon={Emoji.sparkle} size="sm" />{activeChat.status === 'CLOSED' ? 'Session closed' : (activeChat.messages ?? []).length > 0 ? 'Session started again' : 'Session started'}</div>{(activeChat.messages ?? []).length === 0 && activeChat.status !== 'CLOSED' && <EmptyState icon="fluent-emoji-flat:speech-balloon" tone={tones.blue} title="No messages yet" body="Start with a short, kind message." />}{(activeChat.messages ?? []).map((message) => { const mine = message.senderId === userId; return <div className={`grid max-w-[78%] gap-1 ${mine ? 'justify-self-end' : 'justify-self-start'}`} key={message.id}><div className={`rounded-[24px] px-5 py-3 font-bold ${mine ? 'bg-[#1CB0F6] text-white' : 'bg-white text-[#555]'}`}>{message.content && <p>{message.content}</p>}{message.imageUrl && <button className="mt-2 block" type="button" onClick={() => setImagePreview(message.imageUrl ?? '')}><img className="max-h-72 rounded-2xl object-cover" src={message.imageUrl} alt="Chat attachment" /></button>}</div>{mine && <span className="justify-self-end text-xs font-black text-[#999]">{readSessions[activeChat.id] ? 'Read' : 'Sent'}</span>}</div> })}</div>{chatImage && <div className="border-t-2 border-[#EFEFEF] bg-white px-4 pt-3"><div className="relative w-fit"><img className="max-h-32 rounded-2xl object-cover" src={chatImage} alt="Chat attachment preview" /><button className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-[#FF4B4B] text-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></div></div>}<form className="flex items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-4" onSubmit={sendChat}><label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-4 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><textarea className="min-h-12 max-h-32 flex-1 resize-none rounded-3xl border-0 bg-[#F7F7F7] px-5 py-3 font-bold outline-none focus:bg-[#F1FFE8]" value={chatDraft} onChange={(event) => updateChatDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void sendChat(event as unknown as FormEvent<HTMLFormElement>); }} placeholder={activeChat.status === 'CLOSED' ? 'Session is closed' : 'Write a message...'} disabled={activeChat.status === 'CLOSED'} aria-label="Care chat message" rows={1} /><button className="rounded-full bg-[#58CC02] px-6 py-3 font-black text-white shadow-[0_4px_0_#46A302] active:translate-y-0.5 active:shadow-none disabled:opacity-70" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form></>}
         </article>
       </section>
     ),
