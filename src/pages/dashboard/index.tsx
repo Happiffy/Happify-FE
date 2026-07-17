@@ -89,7 +89,7 @@ function DashboardPage() {
   const [chatSearch, setChatSearch] = useState('');
   const [chatImage, setChatImage] = useState('');
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
-  const [onlineSessions] = useState<Record<string, boolean>>({});
+  const [onlineSessions, setOnlineSessions] = useState<Record<string, boolean>>({});
   const [readSessions, setReadSessions] = useState<Record<string, boolean>>({});
   const [certificateUrl, setCertificateUrl] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
@@ -175,6 +175,7 @@ function DashboardPage() {
       if (payload.type === 'community:post') setCommunityPosts((posts) => posts.some((post) => post.id === payload.post.id) ? posts : [payload.post, ...posts]);
       if (payload.type === 'community:comment') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId && !(post.comments ?? []).some((comment) => comment.id === payload.comment.id) ? { ...post, comments: [...(post.comments ?? []), payload.comment] } : post));
       if (payload.type === 'community:support') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId ? { ...post, supportCount: payload.supportCount } : post));
+      if (payload.type === 'presence' && payload.channel?.startsWith('care-chat:')) setOnlineSessions((sessions) => ({ ...sessions, [payload.channel.replace('care-chat:', '')]: payload.count > 1 }));
       if (payload.type === 'care-chat:session') setCareChats((chats) => chats.map((chat) => chat.id === payload.session.id ? { ...chat, status: payload.session.status, closedAt: payload.session.closedAt, updatedAt: payload.session.updatedAt } : chat));
       if (payload.type === 'care-chat:typing' && payload.userId !== userId) setTypingUsers((users) => ({ ...users, [payload.sessionId]: payload.isTyping ? 'Care partner' : '' }));
       if (payload.type === 'care-chat:read' && payload.userId !== userId) setReadSessions((sessions) => ({ ...sessions, [payload.sessionId]: true }));
@@ -256,7 +257,11 @@ function DashboardPage() {
     event.preventDefault();
     const plainText = journalEditorRef.current?.getText() ?? journalContent.trim();
     const content = journalEditorRef.current?.getHTML() ?? plainText;
-    if (!userId || !plainText) return;
+    if (!userId) return;
+    if (!plainText) {
+      setStatusMessage('Write a journal entry before saving.');
+      return;
+    }
     setPendingAction('journal');
     try {
       const title = plainText.split(/[.!?\n]/)[0].slice(0, 60) || 'Journal entry';
@@ -308,7 +313,10 @@ function DashboardPage() {
     event.preventDefault();
     const plainText = communityEditorRef.current?.getText() ?? communityPost.trim();
     const content = communityEditorRef.current?.getHTML() ?? plainText;
-    if (!plainText) return;
+    if (!plainText) {
+      setStatusMessage('Write a story before sharing.');
+      return;
+    }
     setPendingAction('community-post');
     try {
       const imageUrl = communityImage ? await uploadImageIfNeeded(communityImage) : '';
@@ -324,7 +332,10 @@ function DashboardPage() {
   const replyCommunityPost = async (postId: string) => {
     const content = communityCommentDrafts[postId]?.trim() ?? '';
     const image = communityCommentImages[postId];
-    if (!content && !image) return;
+    if (!content && !image) {
+      setStatusMessage('Write a reply or attach a photo before sending.');
+      return;
+    }
     setPendingAction(`reply-${postId}`);
     try {
       const imageUrl = image ? await uploadImageIfNeeded(image) : '';
@@ -399,7 +410,11 @@ function DashboardPage() {
 
   const sendChat = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!activeChat?.id || activeChat.status === 'CLOSED' || (!chatDraft.trim() && !chatImage)) return;
+    if (!activeChat?.id || activeChat.status === 'CLOSED') return;
+    if (!chatDraft.trim() && !chatImage) {
+      setStatusMessage('Write a message or attach a photo before sending.');
+      return;
+    }
     const sessionId = activeChat.id;
     const content = chatDraft.trim();
     const image = chatImage;
@@ -446,7 +461,11 @@ function DashboardPage() {
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!userId || !displayNameInput.trim()) return;
+    if (!userId) return;
+    if (!displayNameInput.trim()) {
+      setStatusMessage('Enter your display name before saving.');
+      return;
+    }
     await updateProfile(userId, { displayName: displayNameInput.trim() });
     if (newPassword) await changePassword(currentPassword, newPassword);
     await refetch();
@@ -458,7 +477,11 @@ function DashboardPage() {
 
   const applyPsychologist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!userId || !certificateUrl.trim() || !licenseNumber.trim()) return;
+    if (!userId) return;
+    if (!certificateUrl.trim() || !licenseNumber.trim()) {
+      setStatusMessage('Add your license number and certificate URL before applying.');
+      return;
+    }
     const fullName = profile?.displayName ?? 'Happify User';
     await submitPsychologistApplication({ userId, fullName, licenseNumber, certificateUrl, reason: 'I want to support Happify users as a verified psychologist.' });
     await refetch();
@@ -721,7 +744,7 @@ function DashboardPage() {
          </aside>
         <article className={`${activeChatId || careChats.length === 0 ? 'grid' : 'hidden xl:grid'} min-h-0 h-full ${activeChat ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : 'grid-rows-[1fr]'} overflow-hidden bg-white`}>
           {!activeChat && <div className="grid h-full place-items-center text-center"><div><h2 className="text-2xl font-black tracking-[-.04em]">Choose a conversation</h2><p className="mt-2 font-bold text-[#999]">Pick a chat from the list to start messaging.</p></div></div>}
-          {activeChat && <><header className="flex items-center gap-3 border-b-2 border-[#EFEFEF] p-4 sm:p-5"><button className="grid size-10 place-items-center rounded-full bg-[#F7F7F7] text-[#777] xl:hidden" type="button" aria-label="Back to chats" onClick={() => { setActiveChatId(''); setSearchParams({}); }}><ArrowRight className="rotate-180" size={22} weight="bold" /></button>{activeChatPeer?.avatarUrl ? <img className="size-12 rounded-full border-2 border-[#E5E5E5] object-cover" src={activeChatPeer.avatarUrl} alt={`${activeChatPeer.displayName ?? 'Care partner'} profile`} referrerPolicy="no-referrer" /> : <span className="grid size-12 place-items-center rounded-full bg-[#1CB0F6] font-black text-white">{(activeChatPeer?.displayName ?? 'C').charAt(0).toUpperCase()}</span>}<div className="min-w-0 flex-1"><h3 className="truncate text-2xl font-black tracking-[-.04em]">{activeChatPeer?.displayName ?? 'Care partner'}</h3><p className="flex items-center gap-2 font-bold text-[#999]"><span className={`size-2.5 rounded-full ${onlineSessions[activeChat.id] ? 'bg-[#58CC02]' : 'bg-[#AAA]'}`} />{typingUsers[activeChat.id] ? `${typingUsers[activeChat.id]} is typing...` : onlineSessions[activeChat.id] ? 'Online' : 'Offline'}</p></div><button className="ml-auto rounded-2xl bg-[#FFEBEB] px-4 py-2 font-black text-[#D53838] shadow-[0_3px_0_#F2B8B8] active:translate-y-0.5 active:shadow-none" type="button" disabled={pendingAction === 'chat-status'} onClick={requestCloseChat}>{pendingAction === 'chat-status' ? 'Closing...' : 'Close'}</button></header><form className="order-3 flex flex-wrap items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-3 sm:flex-nowrap sm:p-4" onSubmit={sendChat}>{chatImage && <span className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[#EAF8FF] px-3 font-black text-[#168CC7]"><ColoredIcon icon={Emoji.picture} size="sm" />Photo ready<button className="grid size-6 place-items-center rounded-full bg-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></span>}<label className="grid min-h-11 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-3 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} size="sm" /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><input className="min-h-11 min-w-0 flex-1 rounded-2xl border-2 border-[#E5E5E5] px-4 font-bold outline-none focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#D6F2FF]" value={chatDraft} maxLength={1200} disabled={pendingAction === 'chat'} onChange={(event) => updateChatDraft(event.target.value)} placeholder="Write a message..." aria-label="Message" /><button className="min-h-11 rounded-2xl bg-[#58CC02] px-4 font-black text-white shadow-[0_3px_0_#46A302] disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED' || (!chatDraft.trim() && !chatImage)}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form><div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain bg-[#FBFBFB] p-5"><div className="inline-flex items-center gap-2 justify-self-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#999] shadow-[0_2px_0_#E5E5E5]"><ColoredIcon icon={Emoji.sparkle} size="sm" />{activeChat.status === 'CLOSED' ? 'Session closed' : (activeChat.messages ?? []).length > 0 ? 'Session started again' : 'Session started'}</div>{(activeChat.messages ?? []).length === 0 && activeChat.status !== 'CLOSED' && <EmptyState icon="fluent-emoji-flat:speech-balloon" tone={tones.blue} title="No messages yet" body="Start with a short, kind message." />}{(activeChat.messages ?? []).map((message) => { const mine = message.senderId === userId; return <div className={`grid max-w-[78%] gap-1 ${mine ? 'justify-self-end' : 'justify-self-start'}`} key={message.id}><div className={`rounded-[24px] px-5 py-3 font-bold ${mine ? 'bg-[#1CB0F6] text-white' : 'bg-white text-[#555]'}`}>{message.content && <p>{message.content}</p>}{message.imageUrl && <button className="mt-2 block" type="button" onClick={() => setImagePreview(message.imageUrl ?? '')}><img className="max-h-72 rounded-2xl object-cover" src={message.imageUrl} alt="Chat attachment" /></button>}</div>{mine && <span className="justify-self-end text-xs font-black text-[#999]">{readSessions[activeChat.id] ? 'Read' : 'Sent'}</span>}</div> })}</div>{chatImage && <div className="border-t-2 border-[#EFEFEF] bg-white px-4 pt-3"><div className="relative w-fit"><img className="max-h-32 rounded-2xl object-cover" src={chatImage} alt="Chat attachment preview" /><button className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-[#FF4B4B] text-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></div></div>}<form className="flex items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-4" onSubmit={sendChat}><label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-4 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><textarea className="min-h-12 max-h-32 flex-1 resize-none rounded-3xl border-0 bg-[#F7F7F7] px-5 py-3 font-bold outline-none focus:bg-[#F1FFE8]" value={chatDraft} onChange={(event) => updateChatDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void sendChat(event as unknown as FormEvent<HTMLFormElement>); }} placeholder={activeChat.status === 'CLOSED' ? 'Session is closed' : 'Write a message...'} disabled={activeChat.status === 'CLOSED'} aria-label="Care chat message" rows={1} /><button className="rounded-full bg-[#58CC02] px-6 py-3 font-black text-white shadow-[0_4px_0_#46A302] active:translate-y-0.5 active:shadow-none disabled:opacity-70" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form></>}
+          {activeChat && <><header className="flex items-center gap-3 border-b-2 border-[#EFEFEF] p-4 sm:p-5"><button className="grid size-10 place-items-center rounded-full bg-[#F7F7F7] text-[#777] xl:hidden" type="button" aria-label="Back to chats" onClick={() => { setActiveChatId(''); setSearchParams({}); }}><ArrowRight className="rotate-180" size={22} weight="bold" /></button>{activeChatPeer?.avatarUrl ? <img className="size-12 rounded-full border-2 border-[#E5E5E5] object-cover" src={activeChatPeer.avatarUrl} alt={`${activeChatPeer.displayName ?? 'Care partner'} profile`} referrerPolicy="no-referrer" /> : <span className="grid size-12 place-items-center rounded-full bg-[#1CB0F6] font-black text-white">{(activeChatPeer?.displayName ?? 'C').charAt(0).toUpperCase()}</span>}<div className="min-w-0 flex-1"><h3 className="truncate text-2xl font-black tracking-[-.04em]">{activeChatPeer?.displayName ?? 'Care partner'}</h3><p className="flex items-center gap-2 font-bold text-[#999]"><span className={`size-2.5 rounded-full ${onlineSessions[activeChat.id] ? 'bg-[#58CC02]' : 'bg-[#AAA]'}`} />{typingUsers[activeChat.id] ? `${typingUsers[activeChat.id]} is typing...` : onlineSessions[activeChat.id] ? 'Online' : 'Offline'}</p></div><button className="ml-auto rounded-2xl bg-[#FFEBEB] px-4 py-2 font-black text-[#D53838] shadow-[0_3px_0_#F2B8B8] active:translate-y-0.5 active:shadow-none" type="button" disabled={pendingAction === 'chat-status'} onClick={requestCloseChat}>{pendingAction === 'chat-status' ? 'Closing...' : 'Close'}</button></header><form className="order-3 flex flex-wrap items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-3 sm:flex-nowrap sm:p-4" onSubmit={sendChat}>{chatImage && <span className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[#EAF8FF] px-3 font-black text-[#168CC7]"><ColoredIcon icon={Emoji.picture} size="sm" />Photo ready<button className="grid size-6 place-items-center rounded-full bg-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></span>}<label className="grid min-h-11 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-3 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} size="sm" /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><input className="min-h-11 min-w-0 flex-1 rounded-2xl border-2 border-[#E5E5E5] px-4 font-bold outline-none focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#D6F2FF]" value={chatDraft} maxLength={1200} disabled={pendingAction === 'chat'} onChange={(event) => updateChatDraft(event.target.value)} placeholder="Write a message..." aria-label="Message" /><button className="min-h-11 rounded-2xl bg-[#58CC02] px-4 font-black text-white shadow-[0_3px_0_#46A302] disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form><div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain bg-[#FBFBFB] p-5"><div className="inline-flex items-center gap-2 justify-self-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#999] shadow-[0_2px_0_#E5E5E5]"><ColoredIcon icon={Emoji.sparkle} size="sm" />{activeChat.status === 'CLOSED' ? 'Session closed' : (activeChat.messages ?? []).length > 0 ? 'Session started again' : 'Session started'}</div>{(activeChat.messages ?? []).length === 0 && activeChat.status !== 'CLOSED' && <EmptyState icon="fluent-emoji-flat:speech-balloon" tone={tones.blue} title="No messages yet" body="Start with a short, kind message." />}{(activeChat.messages ?? []).map((message) => { const mine = message.senderId === userId; return <div className={`grid max-w-[78%] gap-1 ${mine ? 'justify-self-end' : 'justify-self-start'}`} key={message.id}><div className={`rounded-[24px] px-5 py-3 font-bold ${mine ? 'bg-[#1CB0F6] text-white' : 'bg-white text-[#555]'}`}>{message.content && <p>{message.content}</p>}{message.imageUrl && <button className="mt-2 block" type="button" onClick={() => setImagePreview(message.imageUrl ?? '')}><img className="max-h-72 rounded-2xl object-cover" src={message.imageUrl} alt="Chat attachment" /></button>}</div>{mine && <span className="justify-self-end text-xs font-black text-[#999]">{readSessions[activeChat.id] ? 'Read' : 'Sent'}</span>}</div> })}</div>{chatImage && <div className="border-t-2 border-[#EFEFEF] bg-white px-4 pt-3"><div className="relative w-fit"><img className="max-h-32 rounded-2xl object-cover" src={chatImage} alt="Chat attachment preview" /><button className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-[#FF4B4B] text-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></div></div>}<form className="flex items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-4" onSubmit={sendChat}><label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-4 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><textarea className="min-h-12 max-h-32 flex-1 resize-none rounded-3xl border-0 bg-[#F7F7F7] px-5 py-3 font-bold outline-none focus:bg-[#F1FFE8]" value={chatDraft} onChange={(event) => updateChatDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void sendChat(event as unknown as FormEvent<HTMLFormElement>); }} placeholder={activeChat.status === 'CLOSED' ? 'Session is closed' : 'Write a message...'} disabled={activeChat.status === 'CLOSED'} aria-label="Care chat message" rows={1} /><button className="rounded-full bg-[#58CC02] px-6 py-3 font-black text-white shadow-[0_4px_0_#46A302] active:translate-y-0.5 active:shadow-none disabled:opacity-70" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form></>}
         </article>
       </section>
     ),
