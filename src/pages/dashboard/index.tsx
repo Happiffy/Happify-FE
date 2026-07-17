@@ -17,6 +17,7 @@ import RichTextEditor, { type RichTextEditorHandle } from '@/components/rich-tex
 import ColoredIcon from '@/components/colored-icon'
 import JournalJourney from '@/components/journal-journey'
 import { CommunityHeatmap } from '@/components/community-heatmap'
+import { getFirebaseAuth } from '@/config/firebase'
 import { Emoji, MenuEmoji, MoodEmoji } from '@/constants/emoji'
 
 function toDateInputValue(date: Date) {
@@ -25,6 +26,7 @@ function toDateInputValue(date: Date) {
 
 function DatePickerPopover({ label, value, onChange, max }: { label: string, value: string, onChange: (value: string) => void, max?: string }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
   const [month, setMonth] = useState(() => new Date(`${value}T00:00:00`));
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -34,14 +36,15 @@ function DatePickerPopover({ label, value, onChange, max }: { label: string, val
   const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   return <div className="relative min-w-0">
     <span className="mb-2 block text-sm font-black text-[#555]">{label}</span>
-    <button className="flex min-h-12 w-full items-center justify-between rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold text-[#3C3C3C] outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
+    <button className="flex min-h-12 w-full items-center justify-between rounded-2xl border-2 border-[#E5E5E5] bg-white px-4 font-bold text-[#3C3C3C] outline-none focus:border-[#58CC02] focus:ring-4 focus:ring-[#D7FFBF]" type="button" onClick={() => { setDraft(value); setOpen((current) => !current); }} aria-expanded={open}>
       {value}<CaretDown size={18} weight="bold" />
     </button>
     {open && <div className="absolute left-0 top-[calc(100%+8px)] z-30 w-72 rounded-3xl border-2 border-[#E5E5E5] bg-white p-4 shadow-[0_6px_0_#D9D9D9]">
       <div className="mb-3 flex items-center justify-between"><button className="grid size-9 place-items-center rounded-xl hover:bg-[#F7F7F7]" type="button" aria-label="Previous month" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))}><ArrowLeft size={17} weight="bold" /></button><span className="font-black">{monthLabel}</span><button className="grid size-9 place-items-center rounded-xl hover:bg-[#F7F7F7]" type="button" aria-label="Next month" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))}><ArrowRight size={17} weight="bold" /></button></div>
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-black text-[#999]">{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => <span key={day}>{day}</span>)}</div>
-      <div className="mt-2 grid grid-cols-7 gap-1">{Array.from({ length: firstDay }, (_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: dayCount }, (_, index) => { const day = index + 1; const date = formatDate(day); const disabled = Boolean(max && date > max); return <button className={`grid size-8 place-items-center rounded-xl text-sm font-bold ${date === value ? 'bg-[#58CC02] text-white' : disabled ? 'cursor-not-allowed text-[#CCC]' : 'hover:bg-[#F1FFE8]'}`} type="button" disabled={disabled} key={date} onClick={() => onChange(date)}>{day}</button> })}</div>
-    </div>}
+       <div className="mt-2 grid grid-cols-7 gap-1">{Array.from({ length: firstDay }, (_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: dayCount }, (_, index) => { const day = index + 1; const date = formatDate(day); const disabled = Boolean(max && date > max); return <button className={`grid size-8 place-items-center rounded-xl text-sm font-bold ${date === draft ? 'bg-[#58CC02] text-white' : disabled ? 'cursor-not-allowed text-[#CCC]' : 'hover:bg-[#F1FFE8]'}`} type="button" disabled={disabled} key={date} onClick={() => setDraft(date)}>{day}</button> })}</div>
+       <div className="mt-4 flex items-center justify-between"><button className="text-sm font-black text-[#999] hover:text-[#555]" type="button" onClick={() => setDraft(value)}>Clear</button><button className="rounded-xl bg-[#58CC02] px-4 py-2 text-sm font-black text-white shadow-[0_3px_0_#46A302]" type="button" onClick={() => { onChange(draft); setOpen(false); }}>Apply</button></div>
+     </div>}
   </div>
 }
 
@@ -146,32 +149,48 @@ function DashboardPage() {
   }, [activeChatId, activeView, careChats, searchParams, userId]);
 
   useEffect(() => {
+    if (!userId) return;
     const wsBaseUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/^http/, 'ws');
-    const channels = ['community', 'care', `user:${userId}:care`, ...(activeChatId ? [`care-chat:${activeChatId}`] : [])];
-    const sockets = channels.map((channel) => {
-      const socket = new WebSocket(`${wsBaseUrl}/ws?channel=${encodeURIComponent(channel)}`);
-      socket.onmessage = (event) => {
-        const payload = JSON.parse(String(event.data));
-        if (payload.type === 'community:post') setCommunityPosts((posts) => posts.some((post) => post.id === payload.post.id) ? posts : [payload.post, ...posts]);
-        if (payload.type === 'community:comment') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId && !(post.comments ?? []).some((comment) => comment.id === payload.comment.id) ? { ...post, comments: [...(post.comments ?? []), payload.comment] } : post));
-        if (payload.type === 'community:support') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId ? { ...post, supportCount: payload.supportCount, likedByMe: payload.userId === userId ? true : post.likedByMe } : post));
-        if (payload.type === 'presence' && payload.channel?.startsWith('care-chat:')) setOnlineSessions((sessions) => ({ ...sessions, [payload.channel.replace('care-chat:', '')]: payload.count > 1 }));
-        if (payload.type === 'care-chat:session') setCareChats((chats) => chats.map((chat) => chat.id === payload.session.id ? { ...chat, status: payload.session.status, closedAt: payload.session.closedAt, updatedAt: payload.session.updatedAt } : chat));
-        if (payload.type === 'care-chat:typing' && payload.userId !== userId) setTypingUsers((users) => ({ ...users, [payload.sessionId]: payload.name ?? 'Care partner' }));
-        if (payload.type === 'care-chat:stop-typing') setTypingUsers((users) => ({ ...users, [payload.sessionId]: '' }));
-        if (payload.type === 'care-chat:read' && payload.userId !== userId) setReadSessions((sessions) => ({ ...sessions, [payload.sessionId]: true }));
-        if (payload.type === 'care-chat:message') setCareChats((chats) => chats.map((chat) => chat.id === payload.message.sessionId && !(chat.messages ?? []).some((item) => item.id === payload.message.id) ? { ...chat, messages: [...(chat.messages ?? []), payload.message], updatedAt: payload.message.createdAt } : chat));
-        if (payload.type === 'referral:reviewed' && payload.referral?.status === 'ACCEPTED' && payload.referral?.chatSession?.id) {
-          setActiveChatId(payload.referral.chatSession.id);
-          navigate('/dashboard/chat');
+    const socket = new WebSocket(`${wsBaseUrl}/ws`);
+    chatSocketRef.current = socket;
+    socket.onopen = async () => {
+      try {
+        const token = await getFirebaseAuth().currentUser?.getIdToken();
+        if (!token) {
+          socket.close();
+          return;
         }
-        if (payload.type?.startsWith('referral:')) void refetch();
-      };
-      if (channel === `care-chat:${activeChatId}`) chatSocketRef.current = socket;
-      return socket;
-    });
-    return () => sockets.forEach((socket) => socket.close());
-  }, [activeChatId, navigate, refetch, setCareChats, setCommunityPosts, userId]);
+        socket.send(JSON.stringify({ type: 'auth', token }));
+      } catch {
+        socket.close();
+      }
+    };
+    socket.onmessage = (event) => {
+      const payload = JSON.parse(String(event.data));
+      if (payload.type === 'authenticated') {
+        const channels = ['community', ...(isPsychologist ? ['care'] : []), `user:${userId}:care`, ...(activeChatId ? [`care-chat:${activeChatId}`] : [])];
+        channels.forEach((channel) => socket.send(JSON.stringify({ type: 'subscribe', channel })));
+        return;
+      }
+      if (payload.type === 'community:post') setCommunityPosts((posts) => posts.some((post) => post.id === payload.post.id) ? posts : [payload.post, ...posts]);
+      if (payload.type === 'community:comment') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId && !(post.comments ?? []).some((comment) => comment.id === payload.comment.id) ? { ...post, comments: [...(post.comments ?? []), payload.comment] } : post));
+      if (payload.type === 'community:support') setCommunityPosts((posts) => posts.map((post) => post.id === payload.postId ? { ...post, supportCount: payload.supportCount } : post));
+      if (payload.type === 'presence' && payload.channel?.startsWith('care-chat:')) setOnlineSessions((sessions) => ({ ...sessions, [payload.channel.replace('care-chat:', '')]: payload.count > 1 }));
+      if (payload.type === 'care-chat:session') setCareChats((chats) => chats.map((chat) => chat.id === payload.session.id ? { ...chat, status: payload.session.status, closedAt: payload.session.closedAt, updatedAt: payload.session.updatedAt } : chat));
+      if (payload.type === 'care-chat:typing' && payload.userId !== userId) setTypingUsers((users) => ({ ...users, [payload.sessionId]: payload.isTyping ? 'Care partner' : '' }));
+      if (payload.type === 'care-chat:read' && payload.userId !== userId) setReadSessions((sessions) => ({ ...sessions, [payload.sessionId]: true }));
+      if (payload.type === 'care-chat:message') setCareChats((chats) => chats.map((chat) => chat.id === payload.message.sessionId && !(chat.messages ?? []).some((item) => item.id === payload.message.id) ? { ...chat, messages: [...(chat.messages ?? []), payload.message], updatedAt: payload.message.createdAt } : chat));
+      if (payload.type === 'referral:reviewed' && payload.referral?.status === 'ACCEPTED' && payload.referral?.chatSession?.id) {
+        setActiveChatId(payload.referral.chatSession.id);
+        navigate('/dashboard/chat');
+      }
+      if (payload.type?.startsWith('referral:')) void refetch();
+    };
+    return () => {
+      if (chatSocketRef.current === socket) chatSocketRef.current = null;
+      socket.close();
+    };
+  }, [activeChatId, isPsychologist, navigate, refetch, setCareChats, setCommunityPosts, userId]);
 
   const filteredCareChats = careChats.filter((chat) => chat.status !== 'CLOSED').filter((chat) => {
     const peer = chat.userId === userId ? chat.psychologist : chat.user;
@@ -179,6 +198,7 @@ function DashboardPage() {
   });
   const openCareChats = careChats.filter((chat) => chat.status !== 'CLOSED');
   const activeChat = openCareChats.find((chat) => chat.id === activeChatId);
+  const activeChatPeer = activeChat ? (activeChat.userId === userId ? activeChat.psychologist : activeChat.user) : undefined;
   const filteredReferrals = referrals.filter((referral) => {
     const keyword = careSearch.trim().toLowerCase();
     const searchable = `${referral.providerName ?? ''} ${referral.user?.displayName ?? ''} ${referral.reason} ${referral.status ?? ''} ${referral.riskLevel}`.toLowerCase();
@@ -216,10 +236,12 @@ function DashboardPage() {
   }, [activeView, heatmapEndDate, heatmapStartDate]);
 
   useEffect(() => {
-    if (!activeChat?.id) return;
-    if (chatSocketRef.current?.readyState === WebSocket.OPEN) chatSocketRef.current.send(JSON.stringify({ type: 'care-chat:read', sessionId: activeChat.id, userId }));
+    if (!activeChat?.id || chatSocketRef.current?.readyState !== WebSocket.OPEN) return;
+    (activeChat.messages ?? []).filter((message) => message.senderId !== userId && !message.readAt).forEach((message) => {
+      chatSocketRef.current?.send(JSON.stringify({ type: 'care-chat:read', sessionId: activeChat.id, messageId: message.id }));
+    });
     setReadSessions((sessions) => ({ ...sessions, [activeChat.id]: false }));
-  }, [activeChat?.id, userId]);
+  }, [activeChat?.id, activeChat?.messages, userId]);
 
   const saveMood = async () => {
     if (!userId || isSaving) return;
@@ -235,7 +257,11 @@ function DashboardPage() {
     event.preventDefault();
     const plainText = journalEditorRef.current?.getText() ?? journalContent.trim();
     const content = journalEditorRef.current?.getHTML() ?? plainText;
-    if (!userId || !plainText) return;
+    if (!userId) return;
+    if (!plainText) {
+      setStatusMessage('Write a journal entry before saving.');
+      return;
+    }
     setPendingAction('journal');
     try {
       const title = plainText.split(/[.!?\n]/)[0].slice(0, 60) || 'Journal entry';
@@ -287,7 +313,10 @@ function DashboardPage() {
     event.preventDefault();
     const plainText = communityEditorRef.current?.getText() ?? communityPost.trim();
     const content = communityEditorRef.current?.getHTML() ?? plainText;
-    if (!plainText) return;
+    if (!plainText) {
+      setStatusMessage('Write a story before sharing.');
+      return;
+    }
     setPendingAction('community-post');
     try {
       const imageUrl = communityImage ? await uploadImageIfNeeded(communityImage) : '';
@@ -303,7 +332,10 @@ function DashboardPage() {
   const replyCommunityPost = async (postId: string) => {
     const content = communityCommentDrafts[postId]?.trim() ?? '';
     const image = communityCommentImages[postId];
-    if (!content && !image) return;
+    if (!content && !image) {
+      setStatusMessage('Write a reply or attach a photo before sending.');
+      return;
+    }
     setPendingAction(`reply-${postId}`);
     try {
       const imageUrl = image ? await uploadImageIfNeeded(image) : '';
@@ -316,6 +348,10 @@ function DashboardPage() {
 
   const createReferral = async () => {
     if (!userId) return;
+    if (!referralComment.trim()) {
+      setStatusMessage('Describe the support you need before submitting.');
+      return;
+    }
     setPendingAction('referral');
     try {
       const referral = await submitReferral({ userId, riskLevel: 'MEDIUM', reason: 'User requested professional support path from web dashboard.', requestComment: referralComment.trim() || 'No extra comment provided.', providerName: 'Happify Professional Care', providerType: 'Verified psychologist' });
@@ -349,8 +385,8 @@ function DashboardPage() {
 
   const updateChatDraft = (value: string) => {
     setChatDraft(value);
-    if (!activeChat?.id) return;
-    if (chatSocketRef.current?.readyState === WebSocket.OPEN) chatSocketRef.current.send(JSON.stringify({ type: value ? 'care-chat:typing' : 'care-chat:stop-typing', sessionId: activeChat.id, userId, name: profile?.displayName ?? 'Care partner' }));
+    if (!activeChat?.id || chatSocketRef.current?.readyState !== WebSocket.OPEN) return;
+    chatSocketRef.current.send(JSON.stringify({ type: 'care-chat:typing', sessionId: activeChat.id, isTyping: Boolean(value) }));
   };
 
   const requestCloseChat = () => {
@@ -378,7 +414,11 @@ function DashboardPage() {
 
   const sendChat = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!activeChat?.id || activeChat.status === 'CLOSED' || (!chatDraft.trim() && !chatImage)) return;
+    if (!activeChat?.id || activeChat.status === 'CLOSED') return;
+    if (!chatDraft.trim() && !chatImage) {
+      setStatusMessage('Write a message or attach a photo before sending.');
+      return;
+    }
     const sessionId = activeChat.id;
     const content = chatDraft.trim();
     const image = chatImage;
@@ -386,7 +426,7 @@ function DashboardPage() {
     setChatDraft('');
     setChatImage('');
     setCareChats((chats) => chats.map((chat) => chat.id === sessionId ? { ...chat, messages: [...(chat.messages ?? []), { id: pendingId, senderId: userId, content, imageUrl: image || null, createdAt: new Date().toISOString() }] } : chat));
-    chatSocketRef.current?.send(JSON.stringify({ type: 'care-chat:stop-typing', sessionId, userId }));
+    if (chatSocketRef.current?.readyState === WebSocket.OPEN) chatSocketRef.current.send(JSON.stringify({ type: 'care-chat:typing', sessionId, isTyping: false }));
     setPendingAction('chat');
     try {
       const imageUrl = image ? await uploadImageIfNeeded(image) : '';
@@ -425,7 +465,11 @@ function DashboardPage() {
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!userId || !displayNameInput.trim()) return;
+    if (!userId) return;
+    if (!displayNameInput.trim()) {
+      setStatusMessage('Enter your display name before saving.');
+      return;
+    }
     await updateProfile(userId, { displayName: displayNameInput.trim() });
     if (newPassword) await changePassword(currentPassword, newPassword);
     await refetch();
@@ -437,7 +481,11 @@ function DashboardPage() {
 
   const applyPsychologist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!userId || !certificateUrl.trim() || !licenseNumber.trim()) return;
+    if (!userId) return;
+    if (!certificateUrl.trim() || !licenseNumber.trim()) {
+      setStatusMessage('Add your license number and certificate URL before applying.');
+      return;
+    }
     const fullName = profile?.displayName ?? 'Happify User';
     await submitPsychologistApplication({ userId, fullName, licenseNumber, certificateUrl, reason: 'I want to support Happify users as a verified psychologist.' });
     await refetch();
@@ -481,7 +529,7 @@ function DashboardPage() {
             </div>
           </article>
         </section>
-        <article className={`${card} p-5 sm:p-6`}>
+        <article className={`${card} overflow-hidden p-5 sm:p-6`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-black tracking-[-.04em]">Anonymous community heatmap</h2>
@@ -494,8 +542,8 @@ function DashboardPage() {
             <button className={`${primaryBtn} min-h-12`} type="button" onClick={applyHeatmapRange}>Apply</button>
           </div>
           <p className="mt-3 text-sm font-bold text-[#999]" aria-live="polite">{heatmapDraftStartDate !== heatmapStartDate || heatmapDraftEndDate !== heatmapEndDate ? 'Date range changed. Press Apply to update the heatmap.' : `Showing ${heatmapStartDate} to ${heatmapEndDate}.`}</p>
-          <div className="mt-5">
-            {heatmapError && <div className="grid min-h-80 place-items-center rounded-3xl bg-[#F7F7F7] p-6 text-center font-bold text-[#999]">{heatmapError}</div>}
+          <div className="mt-5 -mx-5 sm:mx-0">
+            {heatmapError && <div className="grid min-h-80 place-items-center rounded-none bg-[#F7F7F7] p-6 text-center font-bold text-[#999] sm:rounded-3xl">{heatmapError}</div>}
             {!heatmapError && <CommunityHeatmap items={heatmapRegions} />}
           </div>
         </article>
@@ -641,7 +689,7 @@ function DashboardPage() {
                 <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#CE82FF] font-black text-white">{post.alias.charAt(0).toUpperCase()}</span>
                 <div className="min-w-0">
                   <p className="font-black">{post.alias}</p>
-                  <p className="text-sm font-bold text-[#999]">{new Date(post.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, {new Date(post.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}{post.mood ? ` · ${moodLabel(post.mood)}` : ''}</p>
+                  <p className="flex items-center gap-2 text-sm font-bold text-[#999]">{new Date(post.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, {new Date(post.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}{post.mood && <ColoredIcon icon={MoodEmoji[post.mood]} size="sm" />}</p>
                 </div>
               </div>
               <div className="rich-content mt-3 min-w-0 break-words font-bold leading-7 text-[#555] [&_*]:max-w-full" dangerouslySetInnerHTML={{ __html: post.content }} />
@@ -681,7 +729,7 @@ function DashboardPage() {
       </div>
     ),
     chat: (
-      <section className="grid h-full overflow-hidden bg-white xl:grid-cols-[360px_1fr]" aria-labelledby="chat-title">
+      <section className="grid h-full min-h-0 overflow-hidden bg-white xl:grid-cols-[360px_1fr]" aria-labelledby="chat-title">
         <aside className={`${activeChatId ? 'hidden xl:grid' : 'grid'} content-start border-b-2 border-[#EFEFEF] p-5 xl:border-r-2 xl:border-b-0`}>
           <h2 id="chat-title" className="px-2 text-3xl font-black tracking-[-.04em]">Messages</h2>
           <p className="px-2 pb-4 pt-1 font-bold text-[#999]">Approved care sessions.</p>
@@ -693,14 +741,14 @@ function DashboardPage() {
               const peer = chat.userId === userId ? chat.psychologist : chat.user;
               const lastMessage = chat.messages?.at(-1);
               const selected = activeChat?.id === chat.id;
-              return <button className={`flex items-center gap-3 rounded-3xl p-3 text-left transition ${selected ? 'bg-[#EAF8FF]' : 'hover:bg-[#F7F7F7]'}`} type="button" key={chat.id} onClick={() => openChat(chat.id)}><span className={`grid size-12 shrink-0 place-items-center rounded-full font-black text-white ${selected ? 'bg-[#1CB0F6]' : 'bg-[#CE82FF]'}`}>{(peer?.displayName ?? 'C').charAt(0).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate font-black text-[#3C3C3C]">{peer?.displayName ?? 'Care partner'}</span><span className="block truncate text-sm font-bold text-[#999]">{typingUsers[chat.id] ? `${typingUsers[chat.id]} is typing...` : lastMessage?.content || (lastMessage?.imageUrl ? 'Sent an image' : chat.referral?.reason || 'Chat opened')}</span></span><span className="shrink-0 text-xs font-black text-[#AAA]">{new Date(chat.updatedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}</span></button>
+              return <button className={`flex min-w-0 items-center gap-3 rounded-3xl p-3 text-left transition ${selected ? 'bg-[#EAF8FF]' : 'hover:bg-[#F7F7F7]'}`} type="button" key={chat.id} onClick={() => openChat(chat.id)}><span className={`grid size-12 shrink-0 place-items-center rounded-full font-black text-white ${selected ? 'bg-[#1CB0F6]' : 'bg-[#CE82FF]'}`}>{(peer?.displayName ?? 'C').charAt(0).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate font-black text-[#3C3C3C]">{peer?.displayName ?? 'Care partner'}</span><span className="block truncate text-sm font-bold text-[#999]">{typingUsers[chat.id] ? `${typingUsers[chat.id]} is typing...` : lastMessage?.content || (lastMessage?.imageUrl ? 'Sent an image' : chat.referral?.reason || 'Chat opened')}</span></span><span className="shrink-0 text-xs font-black text-[#AAA]">{new Date(chat.updatedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}</span></button>
              })}
              <LoadMoreSentinel enabled={hasMoreChats} loading={loadingMore === 'chats'} onVisible={() => void loadMoreChats()} />
            </div>
          </aside>
         <article className={`${activeChatId || careChats.length === 0 ? 'grid' : 'hidden xl:grid'} min-h-0 h-full ${activeChat ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : 'grid-rows-[1fr]'} overflow-hidden bg-white`}>
           {!activeChat && <div className="grid h-full place-items-center text-center"><div><h2 className="text-2xl font-black tracking-[-.04em]">Choose a conversation</h2><p className="mt-2 font-bold text-[#999]">Pick a chat from the list to start messaging.</p></div></div>}
-          {activeChat && <><header className="flex items-center gap-3 border-b-2 border-[#EFEFEF] p-4 sm:p-5"><button className="grid size-10 place-items-center rounded-full bg-[#F7F7F7] text-[#777] xl:hidden" type="button" aria-label="Back to chats" onClick={() => { setActiveChatId(''); setSearchParams({}); }}><ArrowRight className="rotate-180" size={22} weight="bold" /></button><span className="grid size-12 place-items-center rounded-full bg-[#1CB0F6] font-black text-white">{((activeChat.userId === userId ? activeChat.psychologist?.displayName : activeChat.user?.displayName) ?? 'C').charAt(0).toUpperCase()}</span><div className="min-w-0 flex-1"><h3 className="truncate text-2xl font-black tracking-[-.04em]">{activeChat.userId === userId ? (activeChat.psychologist?.displayName ?? 'Psychologist') : (activeChat.user?.displayName ?? 'User')}</h3><p className="flex items-center gap-2 font-bold text-[#999]"><span className={`size-2.5 rounded-full ${onlineSessions[activeChat.id] ? 'bg-[#58CC02]' : 'bg-[#AAA]'}`} />{typingUsers[activeChat.id] ? `${typingUsers[activeChat.id]} is typing...` : onlineSessions[activeChat.id] ? 'Online' : 'Offline'}</p></div><button className="ml-auto rounded-2xl bg-[#FFEBEB] px-4 py-2 font-black text-[#D53838] shadow-[0_3px_0_#F2B8B8] active:translate-y-0.5 active:shadow-none" type="button" disabled={pendingAction === 'chat-status'} onClick={requestCloseChat}>{pendingAction === 'chat-status' ? 'Closing...' : 'Close'}</button></header><div className="grid content-end gap-3 overflow-y-auto bg-[#FBFBFB] p-5"><div className="inline-flex items-center gap-2 justify-self-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#999] shadow-[0_2px_0_#E5E5E5]"><ColoredIcon icon={Emoji.sparkle} size="sm" />{activeChat.status === 'CLOSED' ? 'Session closed' : (activeChat.messages ?? []).length > 0 ? 'Session started again' : 'Session started'}</div>{(activeChat.messages ?? []).length === 0 && activeChat.status !== 'CLOSED' && <EmptyState icon="fluent-emoji-flat:speech-balloon" tone={tones.blue} title="No messages yet" body="Start with a short, kind message." />}{(activeChat.messages ?? []).map((message) => { const mine = message.senderId === userId; return <div className={`grid max-w-[78%] gap-1 ${mine ? 'justify-self-end' : 'justify-self-start'}`} key={message.id}><div className={`rounded-[24px] px-5 py-3 font-bold ${mine ? 'bg-[#1CB0F6] text-white' : 'bg-white text-[#555]'}`}>{message.content && <p>{message.content}</p>}{message.imageUrl && <button className="mt-2 block" type="button" onClick={() => setImagePreview(message.imageUrl ?? '')}><img className="max-h-72 rounded-2xl object-cover" src={message.imageUrl} alt="Chat attachment" /></button>}</div>{mine && <span className="justify-self-end text-xs font-black text-[#999]">{readSessions[activeChat.id] ? 'Read' : 'Sent'}</span>}</div> })}</div>{chatImage && <div className="border-t-2 border-[#EFEFEF] bg-white px-4 pt-3"><div className="relative w-fit"><img className="max-h-32 rounded-2xl object-cover" src={chatImage} alt="Chat attachment preview" /><button className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-[#FF4B4B] text-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></div></div>}<form className="flex items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-4" onSubmit={sendChat}><label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-4 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><textarea className="min-h-12 max-h-32 flex-1 resize-none rounded-3xl border-0 bg-[#F7F7F7] px-5 py-3 font-bold outline-none focus:bg-[#F1FFE8]" value={chatDraft} onChange={(event) => updateChatDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void sendChat(event as unknown as FormEvent<HTMLFormElement>); }} placeholder={activeChat.status === 'CLOSED' ? 'Session is closed' : 'Write a message...'} disabled={activeChat.status === 'CLOSED'} aria-label="Care chat message" rows={1} /><button className="rounded-full bg-[#58CC02] px-6 py-3 font-black text-white shadow-[0_4px_0_#46A302] active:translate-y-0.5 active:shadow-none disabled:opacity-70" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form></>}
+          {activeChat && <><header className="flex items-center gap-3 border-b-2 border-[#EFEFEF] p-4 sm:p-5"><button className="grid size-10 place-items-center rounded-full bg-[#F7F7F7] text-[#777] xl:hidden" type="button" aria-label="Back to chats" onClick={() => { setActiveChatId(''); setSearchParams({}); }}><ArrowRight className="rotate-180" size={22} weight="bold" /></button>{activeChatPeer?.avatarUrl ? <img className="size-12 rounded-full border-2 border-[#E5E5E5] object-cover" src={activeChatPeer.avatarUrl} alt={`${activeChatPeer.displayName ?? 'Care partner'} profile`} referrerPolicy="no-referrer" /> : <span className="grid size-12 place-items-center rounded-full bg-[#1CB0F6] font-black text-white">{(activeChatPeer?.displayName ?? 'C').charAt(0).toUpperCase()}</span>}<div className="min-w-0 flex-1"><h3 className="truncate text-2xl font-black tracking-[-.04em]">{activeChatPeer?.displayName ?? 'Care partner'}</h3><p className="flex items-center gap-2 font-bold text-[#999]"><span className={`size-2.5 rounded-full ${onlineSessions[activeChat.id] ? 'bg-[#58CC02]' : 'bg-[#AAA]'}`} />{typingUsers[activeChat.id] ? `${typingUsers[activeChat.id]} is typing...` : onlineSessions[activeChat.id] ? 'Online' : 'Offline'}</p></div><button className="ml-auto rounded-2xl bg-[#FFEBEB] px-4 py-2 font-black text-[#D53838] shadow-[0_3px_0_#F2B8B8] active:translate-y-0.5 active:shadow-none" type="button" disabled={pendingAction === 'chat-status'} onClick={requestCloseChat}>{pendingAction === 'chat-status' ? 'Closing...' : 'Close'}</button></header><form className="order-3 flex flex-wrap items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-3 sm:flex-nowrap sm:p-4" onSubmit={sendChat}>{chatImage && <span className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[#EAF8FF] px-3 font-black text-[#168CC7]"><ColoredIcon icon={Emoji.picture} size="sm" />Photo ready<button className="grid size-6 place-items-center rounded-full bg-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></span>}<label className="grid min-h-11 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-3 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} size="sm" /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><input className="min-h-11 min-w-0 flex-1 rounded-2xl border-2 border-[#E5E5E5] px-4 font-bold outline-none focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#D6F2FF]" value={chatDraft} maxLength={1200} disabled={pendingAction === 'chat'} onChange={(event) => updateChatDraft(event.target.value)} placeholder="Write a message..." aria-label="Message" /><button className="min-h-11 rounded-2xl bg-[#58CC02] px-4 font-black text-white shadow-[0_3px_0_#46A302] disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form><div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain bg-[#FBFBFB] p-5"><div className="inline-flex items-center gap-2 justify-self-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#999] shadow-[0_2px_0_#E5E5E5]"><ColoredIcon icon={Emoji.sparkle} size="sm" />{activeChat.status === 'CLOSED' ? 'Session closed' : (activeChat.messages ?? []).length > 0 ? 'Session started again' : 'Session started'}</div>{(activeChat.messages ?? []).length === 0 && activeChat.status !== 'CLOSED' && <EmptyState icon="fluent-emoji-flat:speech-balloon" tone={tones.blue} title="No messages yet" body="Start with a short, kind message." />}{(activeChat.messages ?? []).map((message) => { const mine = message.senderId === userId; return <div className={`grid max-w-[78%] gap-1 ${mine ? 'justify-self-end' : 'justify-self-start'}`} key={message.id}><div className={`rounded-[24px] px-5 py-3 font-bold ${mine ? 'bg-[#1CB0F6] text-white' : 'bg-white text-[#555]'}`}>{message.content && <p>{message.content}</p>}{message.imageUrl && <button className="mt-2 block" type="button" onClick={() => setImagePreview(message.imageUrl ?? '')}><img className="max-h-72 rounded-2xl object-cover" src={message.imageUrl} alt="Chat attachment" /></button>}</div>{mine && <span className="justify-self-end text-xs font-black text-[#999]">{readSessions[activeChat.id] ? 'Read' : 'Sent'}</span>}</div> })}</div>{chatImage && <div className="border-t-2 border-[#EFEFEF] bg-white px-4 pt-3"><div className="relative w-fit"><img className="max-h-32 rounded-2xl object-cover" src={chatImage} alt="Chat attachment preview" /><button className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-[#FF4B4B] text-white" type="button" aria-label="Remove chat image" onClick={() => setChatImage('')}><X size={14} weight="bold" /></button></div></div>}<form className="flex items-center gap-2 border-t-2 border-[#EFEFEF] bg-white p-4" onSubmit={sendChat}><label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl bg-[#F7F7F7] px-4 text-[#1CB0F6] transition hover:bg-[#EAF8FF]" htmlFor="chat-image"><ColoredIcon icon={Emoji.picture} /><input id="chat-image" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={attachChatImage} /></label><textarea className="min-h-12 max-h-32 flex-1 resize-none rounded-3xl border-0 bg-[#F7F7F7] px-5 py-3 font-bold outline-none focus:bg-[#F1FFE8]" value={chatDraft} onChange={(event) => updateChatDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void sendChat(event as unknown as FormEvent<HTMLFormElement>); }} placeholder={activeChat.status === 'CLOSED' ? 'Session is closed' : 'Write a message...'} disabled={activeChat.status === 'CLOSED'} aria-label="Care chat message" rows={1} /><button className="rounded-full bg-[#58CC02] px-6 py-3 font-black text-white shadow-[0_4px_0_#46A302] active:translate-y-0.5 active:shadow-none disabled:opacity-70" type="submit" disabled={pendingAction === 'chat' || activeChat.status === 'CLOSED'}>{pendingAction === 'chat' ? 'Sending...' : 'Send'}</button></form></>}
         </article>
       </section>
     ),
