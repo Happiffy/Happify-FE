@@ -23,7 +23,7 @@ export type UserProfile = {
 
 export type CommunityComment = { id: string, alias: string, content: string, imageUrl?: string | null, createdAt: string };
 export type CommunityPost = { id: string, alias: string, content: string, imageUrl?: string | null, mood?: string | null, supportCount: number, likedByMe?: boolean, createdAt: string, comments?: CommunityComment[] };
-export type HeatmapRegion = { regionKey: string, count: number, moods: Record<string, number> };
+export type HeatmapRegion = { regionKey: string, latitude: number, longitude: number, bounds: { south: number, west: number, north: number, east: number }, count: number, moods: Record<string, number> };
 
 export type ReferralBackground = { preference?: { primaryGoal?: string, triggers?: string[], supportTone?: string, highRiskAction?: string } | null, recentMoods?: { state: string, intensity: number, triggers: string[], note?: string | null, createdAt: string }[], recentJournals?: { title: string, riskLevel: string, detectedMood?: string | null, aiReflection?: string | null, createdAt: string }[] };
 export type CareChatMessage = { id: string, senderId: string, content: string, imageUrl?: string | null, readAt?: string | null, createdAt: string, sender?: { id: string, displayName?: string | null, avatarUrl?: string | null, role?: string } };

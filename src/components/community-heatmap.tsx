@@ -7,6 +7,9 @@ export type HeatmapRegion = {
   regionKey: string
   count: number
   moods: Record<string, number>
+  latitude: number
+  longitude: number
+  bounds: { south: number, west: number, north: number, east: number }
 }
 
 type HeatmapProperties = {
@@ -17,14 +20,6 @@ type HeatmapProperties = {
   color: string
 }
 
-function parseRegionKey(regionKey: string) {
-  const match = /^G([NS])(\d+)_([EW])(\d+)$/.exec(regionKey)
-  if (!match) return null
-  return {
-    latitude: Number(match[2]) / 10 * (match[1] === 'S' ? -1 : 1),
-    longitude: Number(match[4]) / 10 * (match[3] === 'W' ? -1 : 1),
-  }
-}
 
 function dominantMood(moods: Record<string, number>) {
   return Object.entries(moods).sort(([, left], [, right]) => right - left)[0]?.[0] ?? 'NEUTRAL'
@@ -77,15 +72,12 @@ export function CommunityHeatmap({ items }: { items: HeatmapRegion[] }) {
   const data = useMemo<FeatureCollection<Polygon, HeatmapProperties>>(() => ({
     type: 'FeatureCollection',
     features: items.flatMap((item) => {
-      const region = parseRegionKey(item.regionKey)
-      if (!region) return []
       const mood = dominantMood(item.moods)
-      const size = 0.1
       return [{
         type: 'Feature' as const,
         properties: { id: item.regionKey, regionKey: item.regionKey, count: item.count, mood, color: moodColor(mood) },
         geometry: { type: 'Polygon' as const, coordinates: [[
-          [region.longitude, region.latitude], [region.longitude + size, region.latitude], [region.longitude + size, region.latitude + size], [region.longitude, region.latitude + size], [region.longitude, region.latitude],
+          [item.bounds.west, item.bounds.south], [item.bounds.east, item.bounds.south], [item.bounds.east, item.bounds.north], [item.bounds.west, item.bounds.north], [item.bounds.west, item.bounds.south],
         ]] },
       }]
     }),
