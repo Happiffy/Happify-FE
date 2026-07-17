@@ -348,6 +348,10 @@ function DashboardPage() {
 
   const createReferral = async () => {
     if (!userId) return;
+    if (!referralComment.trim()) {
+      setStatusMessage('Describe the support you need before submitting.');
+      return;
+    }
     setPendingAction('referral');
     try {
       const referral = await submitReferral({ userId, riskLevel: 'MEDIUM', reason: 'User requested professional support path from web dashboard.', requestComment: referralComment.trim() || 'No extra comment provided.', providerName: 'Happify Professional Care', providerType: 'Verified psychologist' });

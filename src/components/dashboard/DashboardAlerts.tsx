@@ -3,13 +3,15 @@ import { useEffect } from 'react';
 const btn = 'inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl px-6 font-black transition active:translate-y-1 active:shadow-none';
 
 export function DashboardAlert({ message, onClose }: { message: string, onClose: () => void }) {
+  const normalized = message.toLowerCase();
+  const isError = normalized.includes('failed') || normalized.includes('error') || normalized.includes('could not') || normalized.includes('describe ') || normalized.includes('enter ') || normalized.includes('write ') || normalized.includes('add ');
   useEffect(() => {
     const timer = setTimeout(onClose, 5000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
   return (
-    <div className="fixed right-5 top-5 z-50 max-w-sm rounded-3xl border-2 border-[#58CC02] bg-[#F1FFE8] p-4 font-black text-[#46A302] shadow-[0_4px_0_#B7ECA2]" role="status">
+    <div className={`fixed right-5 top-5 z-50 max-w-sm rounded-3xl border-2 p-4 font-black ${isError ? 'border-[#FF4B4B] bg-[#FFEBEB] text-[#D53838] shadow-[0_4px_0_#F2B8B8]' : 'border-[#58CC02] bg-[#F1FFE8] text-[#46A302] shadow-[0_4px_0_#B7ECA2]'}`} role={isError ? 'alert' : 'status'}>
       {message}
     </div>
   );
