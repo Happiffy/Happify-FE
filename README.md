@@ -435,20 +435,6 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software.
 ```
 
----
-
-<div align="center">
-
-**Happify Component Map**
-
-| Repository | Component | Status |
-|---|---|---|
-| [`Happify-BE`](https://github.com/Happiffy/Happify-BE) | ☁️ API server, PostgreSQL, WebSocket hub | 🔗 |
-| [`Happify-AI`](https://github.com/Happiffy/Happify-AI) | 🧠 Journal reflection & risk detection service | 🔗 |
-| [`Happify-Mobile`](https://github.com/Happiffy/Happify-Mobile) | 📱 Flutter mobile app | 🔗 |
-| [`Happify-IOT`](https://github.com/Happiffy/Happify-IOT) | 🔌 Companion-device integration | 🔗 |
-| [`Happify-FE`](https://github.com/Happiffy/Happify-FE) | 🌐 Web dashboard | ✅ This repo |
-
 <br/>
 
 *"Detect early. Support meaningfully. Grow for life."*
