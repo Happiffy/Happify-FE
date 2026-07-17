@@ -5,6 +5,7 @@ import LandingPage from '@/pages/landing'
 import AuthPage from '@/pages/auth'
 import OnboardingPage from '@/pages/onboarding'
 import DashboardPage from '@/pages/dashboard'
+import DownloadsPage from '@/pages/downloads'
 import './App.css'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -34,6 +35,7 @@ function App() {
       <Route path="/login" element={<AuthPage mode="login" />} />
       <Route path="/register" element={<AuthPage mode="register" />} />
       <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route path="/downloads" element={<DownloadsPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/dashboard/:section" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
     </Routes>
