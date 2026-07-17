@@ -44,15 +44,15 @@ export function EmptyState({ icon, tone, title, body }: { icon: Icon | string, t
   )
 }
 
-export function DuoSelect({ value, options, onChange, label }: { value: string, options: { value: string, label: string }[], onChange: (value: string) => void, label: string }) {
+export function DuoSelect({ value, options, onChange, label }: { value: string, options: { value: string, label: string, icon?: string }[], onChange: (value: string) => void, label: string }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value) ?? options[0];
   return (
     <div className="relative">
       <button className={`flex min-h-12 w-full items-center justify-between rounded-2xl border-2 bg-white px-4 font-black shadow-[0_3px_0_#D9D9D9] outline-none transition ${open ? 'border-[#58CC02] ring-4 ring-[#D7FFBF]' : 'border-[#E5E5E5]'}`} type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span>{selected.label}</span><CaretDown size={18} weight="bold" />
+        <span className="inline-flex items-center gap-2">{selected.icon && <ColoredIcon icon={selected.icon} size="sm" />}{selected.label}</span><CaretDown size={18} weight="bold" />
       </button>
-      {open && <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border-2 border-[#E5E5E5] bg-white font-black shadow-[0_5px_0_#D9D9D9]">{options.map((option) => <button className={`block w-full px-4 py-3 text-left transition ${option.value === value ? 'bg-[#F1FFE8] text-[#46A302]' : 'hover:bg-[#F7F7F7] text-[#555]'}`} type="button" key={option.value} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}</button>)}</div>}
+      {open && <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border-2 border-[#E5E5E5] bg-white font-black shadow-[0_5px_0_#D9D9D9]">{options.map((option) => <button className={`flex w-full items-center gap-2 px-4 py-3 text-left transition ${option.value === value ? 'bg-[#F1FFE8] text-[#46A302]' : 'hover:bg-[#F7F7F7] text-[#555]'}`} type="button" key={option.value} onClick={() => { onChange(option.value); setOpen(false); }}>{option.icon && <ColoredIcon icon={option.icon} size="sm" />}{option.label}</button>)}</div>}
     </div>
   );
 }
